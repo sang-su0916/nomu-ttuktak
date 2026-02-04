@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useReactToPrint } from 'react-to-print';
-import { CompanyInfo, EmployeeInfo } from '@/types';
-import { loadCompanyInfo, defaultCompanyInfo, formatDate, formatCurrency, formatBusinessNumber, formatResidentNumber } from '@/lib/storage';
+import { CompanyInfo, EmployeeInfo, Employee } from '@/types';
+import { loadCompanyInfo, defaultCompanyInfo, formatDate, formatCurrency, formatBusinessNumber, formatResidentNumber, getActiveEmployees } from '@/lib/storage';
 
 interface ContractData {
   company: CompanyInfo;
@@ -87,6 +87,8 @@ const WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일'];
 export default function FulltimeContractPage() {
   const [contract, setContract] = useState<ContractData>(defaultContract);
   const [showPreview, setShowPreview] = useState(false);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -98,7 +100,35 @@ export default function FulltimeContractPage() {
         workplace: savedCompany.address 
       }));
     }
+    // 등록된 직원 목록 불러오기
+    setEmployees(getActiveEmployees().filter(e => e.employmentType === 'fulltime'));
   }, []);
+
+  // 직원 선택 시 정보 자동 입력
+  const handleEmployeeSelect = (employeeId: string) => {
+    setSelectedEmployeeId(employeeId);
+    if (!employeeId) return;
+    
+    const emp = employees.find(e => e.id === employeeId);
+    if (!emp) return;
+
+    setContract(prev => ({
+      ...prev,
+      employee: emp.info,
+      startDate: emp.hireDate,
+      department: emp.department || '',
+      position: emp.position || '',
+      workStartTime: emp.workCondition.workStartTime,
+      workEndTime: emp.workCondition.workEndTime,
+      breakTime: emp.workCondition.breakTime,
+      workDays: emp.workCondition.workDays,
+      baseSalary: emp.salary.baseSalary,
+      annualSalary: emp.salary.baseSalary * 12,
+      mealAllowance: emp.salary.mealAllowance,
+      transportAllowance: emp.salary.carAllowance,
+      insurance: emp.insurance,
+    }));
+  };
 
   // 연봉 ↔ 월급 자동 계산
   useEffect(() => {
@@ -224,6 +254,29 @@ export default function FulltimeContractPage() {
           {/* 근로자 정보 */}
           <div className="form-section">
             <h2 className="form-section-title">👤 근로자 정보</h2>
+            
+            {/* 직원 선택 (연동) */}
+            {employees.length > 0 && (
+              <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <label className="input-label text-blue-700">🔗 등록된 직원에서 선택</label>
+                <select
+                  className="input-field mt-1"
+                  value={selectedEmployeeId}
+                  onChange={(e) => handleEmployeeSelect(e.target.value)}
+                >
+                  <option value="">직접 입력</option>
+                  {employees.map(emp => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.info.name} ({emp.department || '부서없음'} / {emp.position || '직위없음'})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-blue-600 mt-1">
+                  💡 직원을 선택하면 모든 정보가 자동으로 입력됩니다.
+                </p>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="input-label">성명 *</label>
