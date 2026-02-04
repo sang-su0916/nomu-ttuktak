@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useReactToPrint } from 'react-to-print';
-import { CompanyInfo, EmployeeInfo } from '@/types';
-import { loadCompanyInfo, defaultCompanyInfo, formatDate, formatCurrency, formatBusinessNumber, formatResidentNumber } from '@/lib/storage';
+import { CompanyInfo, EmployeeInfo, Employee } from '@/types';
+import { loadCompanyInfo, defaultCompanyInfo, formatDate, formatCurrency, formatBusinessNumber, formatResidentNumber, getActiveEmployees } from '@/lib/storage';
 
 interface WorkSchedule {
   day: string;
@@ -99,6 +99,8 @@ const defaultContract: ParttimeContractData = {
 export default function ParttimeContractPage() {
   const [contract, setContract] = useState<ParttimeContractData>(defaultContract);
   const [showPreview, setShowPreview] = useState(false);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -110,7 +112,34 @@ export default function ParttimeContractPage() {
         workplace: savedCompany.address 
       }));
     }
+    // 등록된 파트타임 직원 목록 불러오기
+    setEmployees(getActiveEmployees().filter(e => e.employmentType === 'parttime'));
   }, []);
+
+  // 직원 선택 시 정보 자동 입력
+  const handleEmployeeSelect = (employeeId: string) => {
+    setSelectedEmployeeId(employeeId);
+    if (!employeeId) return;
+    
+    const emp = employees.find(e => e.id === employeeId);
+    if (!emp) return;
+
+    setContract(prev => ({
+      ...prev,
+      employee: emp.info,
+      startDate: emp.hireDate,
+      fixedSchedule: {
+        ...prev.fixedSchedule,
+        workStartTime: emp.workCondition.workStartTime,
+        workEndTime: emp.workCondition.workEndTime,
+        breakTime: emp.workCondition.breakTime,
+        workDays: emp.workCondition.workDays,
+      },
+      weeklyHours: emp.workCondition.weeklyHours,
+      hourlyWage: emp.salary.hourlyWage || 10030,
+      insurance: emp.insurance,
+    }));
+  };
 
   // 주간 근로시간 자동 계산
   useEffect(() => {
@@ -233,6 +262,29 @@ export default function ParttimeContractPage() {
           {/* 근로자 정보 */}
           <div className="form-section border-purple-200">
             <h2 className="form-section-title text-purple-800">👤 근로자 정보</h2>
+            
+            {/* 직원 선택 (연동) */}
+            {employees.length > 0 && (
+              <div className="mb-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
+                <label className="input-label text-purple-700">🔗 등록된 직원에서 선택</label>
+                <select
+                  className="input-field mt-1"
+                  value={selectedEmployeeId}
+                  onChange={(e) => handleEmployeeSelect(e.target.value)}
+                >
+                  <option value="">직접 입력</option>
+                  {employees.map(emp => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.info.name} (주 {emp.workCondition.weeklyHours}시간)
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-purple-600 mt-1">
+                  💡 직원을 선택하면 모든 정보가 자동으로 입력됩니다.
+                </p>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="input-label">성명 *</label>
