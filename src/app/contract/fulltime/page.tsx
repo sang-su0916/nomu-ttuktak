@@ -16,7 +16,12 @@ interface ContractData {
   workEndTime: string;
   breakTime: number;
   workDays: string[];
+  weeklyHoliday: string;        // 주휴일 (필수)
   baseSalary: number;
+  salaryType: string;           // 급여 형태 (월급/일급/시급)
+  paymentMethod: string;        // 지급방법 (계좌이체 등)
+  bonusInfo: string;            // 상여금 정보
+  allowanceInfo: string;        // 수당 정보
   paymentDate: number;
   annualLeave: number;
   insurance: {
@@ -45,7 +50,12 @@ const defaultContract: ContractData = {
   workEndTime: '18:00',
   breakTime: 60,
   workDays: ['월', '화', '수', '목', '금'],
+  weeklyHoliday: '매주 일요일',
   baseSalary: 0,
+  salaryType: '월급',
+  paymentMethod: '근로자 명의 예금통장에 입금',
+  bonusInfo: '회사 내규에 따름',
+  allowanceInfo: '',
   paymentDate: 25,
   annualLeave: 15,
   insurance: {
@@ -327,14 +337,42 @@ export default function FulltimeContractPage() {
                 ))}
               </div>
             </div>
+            <div className="mt-4">
+              <label className="input-label">주휴일 (필수) *</label>
+              <select
+                className="input-field"
+                value={contract.weeklyHoliday}
+                onChange={(e) => updateContract('weeklyHoliday', e.target.value)}
+              >
+                <option value="매주 일요일">매주 일요일</option>
+                <option value="매주 토요일">매주 토요일</option>
+                <option value="매주 토요일, 일요일">매주 토요일, 일요일</option>
+                <option value="주 1회 (별도 지정)">주 1회 (별도 지정)</option>
+              </select>
+              <p className="text-sm text-gray-400 mt-1">
+                근로기준법 제55조에 따라 1주에 평균 1회 이상의 유급휴일 필수
+              </p>
+            </div>
           </div>
 
           {/* 급여 */}
           <div className="form-section">
-            <h2 className="form-section-title">💰 급여</h2>
+            <h2 className="form-section-title">💰 급여 (근로기준법 제17조 필수)</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="input-label">월 기본급 (원) *</label>
+                <label className="input-label">급여 형태 *</label>
+                <select
+                  className="input-field"
+                  value={contract.salaryType}
+                  onChange={(e) => updateContract('salaryType', e.target.value)}
+                >
+                  <option value="월급">월급</option>
+                  <option value="일급">일급</option>
+                  <option value="시급">시급</option>
+                </select>
+              </div>
+              <div>
+                <label className="input-label">기본급 (원) *</label>
                 <input
                   type="number"
                   className="input-field"
@@ -345,6 +383,17 @@ export default function FulltimeContractPage() {
                 <p className="text-sm text-gray-400 mt-1">
                   {contract.baseSalary > 0 && `= ${formatCurrency(contract.baseSalary)}`}
                 </p>
+              </div>
+              <div>
+                <label className="input-label">지급방법 *</label>
+                <select
+                  className="input-field"
+                  value={contract.paymentMethod}
+                  onChange={(e) => updateContract('paymentMethod', e.target.value)}
+                >
+                  <option value="근로자 명의 예금통장에 입금">근로자 명의 예금통장에 입금</option>
+                  <option value="현금 직접 지급">현금 직접 지급</option>
+                </select>
               </div>
               <div>
                 <label className="input-label">급여 지급일</label>
@@ -365,6 +414,29 @@ export default function FulltimeContractPage() {
                   className="input-field"
                   value={contract.annualLeave}
                   onChange={(e) => updateContract('annualLeave', parseInt(e.target.value) || 0)}
+                />
+                <p className="text-sm text-gray-400 mt-1">
+                  근로기준법 제60조에 따름
+                </p>
+              </div>
+              <div>
+                <label className="input-label">상여금</label>
+                <input
+                  type="text"
+                  className="input-field"
+                  placeholder="예: 연 400% (회사 내규에 따름)"
+                  value={contract.bonusInfo}
+                  onChange={(e) => updateContract('bonusInfo', e.target.value)}
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="input-label">기타 수당</label>
+                <input
+                  type="text"
+                  className="input-field"
+                  placeholder="예: 식대 월 10만원, 교통비 월 10만원"
+                  value={contract.allowanceInfo}
+                  onChange={(e) => updateContract('allowanceInfo', e.target.value)}
                 />
               </div>
             </div>
@@ -417,11 +489,24 @@ function ContractPreview({ contract }: { contract: ContractData }) {
   if (contract.insurance.employment) insuranceList.push('고용보험');
   if (contract.insurance.industrial) insuranceList.push('산재보험');
 
+  // 소정근로시간 계산
+  const startHour = parseInt(contract.workStartTime.split(':')[0]);
+  const startMin = parseInt(contract.workStartTime.split(':')[1]);
+  const endHour = parseInt(contract.workEndTime.split(':')[0]);
+  const endMin = parseInt(contract.workEndTime.split(':')[1]);
+  const totalMinutes = (endHour * 60 + endMin) - (startHour * 60 + startMin) - contract.breakTime;
+  const dailyHours = Math.floor(totalMinutes / 60);
+  const dailyMins = totalMinutes % 60;
+  const weeklyHours = totalMinutes * contract.workDays.length / 60;
+
   return (
     <div className="contract-document p-8" style={{ fontFamily: "'Nanum Gothic', sans-serif" }}>
-      <h1 style={{ fontSize: '24px', fontWeight: 'bold', textAlign: 'center', marginBottom: '32px' }}>
+      <h1 style={{ fontSize: '24px', fontWeight: 'bold', textAlign: 'center', marginBottom: '8px' }}>
         표준 근로계약서
       </h1>
+      <p style={{ fontSize: '12px', textAlign: 'center', color: '#666', marginBottom: '32px' }}>
+        (근로기준법 제17조에 의한 근로조건 명시)
+      </p>
 
       <p style={{ marginBottom: '24px', lineHeight: '1.8' }}>
         <strong>{contract.company.name}</strong>(이하 &quot;사용자&quot;라 함)과(와) 
@@ -435,7 +520,7 @@ function ContractPreview({ contract }: { contract: ContractData }) {
               1. 계약기간
             </th>
             <td style={{ border: '1px solid #333', padding: '12px' }}>
-              {formatDate(contract.startDate)} ~ 무기한 (정규직)
+              {formatDate(contract.startDate)} ~ 정함이 없음 (정규직)
             </td>
           </tr>
           <tr>
@@ -456,33 +541,52 @@ function ContractPreview({ contract }: { contract: ContractData }) {
           </tr>
           <tr>
             <th style={{ border: '1px solid #333', padding: '12px', backgroundColor: '#f3f4f6', textAlign: 'left' }}>
-              4. 근로시간
+              4. 소정근로시간
             </th>
             <td style={{ border: '1px solid #333', padding: '12px' }}>
-              {contract.workStartTime} ~ {contract.workEndTime} (휴게시간 {contract.breakTime}분 제외)<br />
-              주 소정근로일: {contract.workDays.join(', ')}
+              <strong>• 근무시간:</strong> {contract.workStartTime} ~ {contract.workEndTime}<br />
+              <strong>• 휴게시간:</strong> {contract.breakTime}분<br />
+              <strong>• 1일 소정근로시간:</strong> {dailyHours}시간 {dailyMins > 0 ? `${dailyMins}분` : ''}<br />
+              <strong>• 주 소정근로시간:</strong> {weeklyHours.toFixed(1)}시간<br />
+              <strong>• 근무요일:</strong> {contract.workDays.join(', ')} (주 {contract.workDays.length}일)
             </td>
           </tr>
           <tr>
             <th style={{ border: '1px solid #333', padding: '12px', backgroundColor: '#f3f4f6', textAlign: 'left' }}>
-              5. 급여
+              5. 휴일<br/><span style={{ fontSize: '11px', fontWeight: 'normal' }}>(근로기준법 제55조)</span>
             </th>
             <td style={{ border: '1px solid #333', padding: '12px' }}>
-              월 기본급: {formatCurrency(contract.baseSalary)}<br />
-              급여 지급일: 매월 {contract.paymentDate}일
+              <strong>• 주휴일:</strong> {contract.weeklyHoliday} (유급)<br />
+              <strong>• 근로자의 날:</strong> 5월 1일 (유급)
             </td>
           </tr>
           <tr>
             <th style={{ border: '1px solid #333', padding: '12px', backgroundColor: '#f3f4f6', textAlign: 'left' }}>
-              6. 연차휴가
+              6. 연차유급휴가<br/><span style={{ fontSize: '11px', fontWeight: 'normal' }}>(근로기준법 제60조)</span>
             </th>
             <td style={{ border: '1px solid #333', padding: '12px' }}>
-              연 {contract.annualLeave}일 (근로기준법에 따름)
+              연 {contract.annualLeave}일 (근로기준법에 따라 부여)
             </td>
           </tr>
           <tr>
             <th style={{ border: '1px solid #333', padding: '12px', backgroundColor: '#f3f4f6', textAlign: 'left' }}>
-              7. 4대보험
+              7. 임금<br/><span style={{ fontSize: '11px', fontWeight: 'normal' }}>(근로기준법 제17조)</span>
+            </th>
+            <td style={{ border: '1px solid #333', padding: '12px' }}>
+              <strong>• 임금형태:</strong> {contract.salaryType}<br />
+              <strong>• 기본급:</strong> {formatCurrency(contract.baseSalary)} (세전)<br />
+              {contract.bonusInfo && <><strong>• 상여금:</strong> {contract.bonusInfo}<br /></>}
+              {contract.allowanceInfo && <><strong>• 기타수당:</strong> {contract.allowanceInfo}<br /></>}
+              <strong>• 임금지급일:</strong> 매월 {contract.paymentDate}일<br />
+              <strong>• 지급방법:</strong> {contract.paymentMethod}<br />
+              <span style={{ fontSize: '11px', color: '#666' }}>
+                ※ 초과근로에 대해서는 근로기준법에서 정하는 바에 따라 추가 지급
+              </span>
+            </td>
+          </tr>
+          <tr>
+            <th style={{ border: '1px solid #333', padding: '12px', backgroundColor: '#f3f4f6', textAlign: 'left' }}>
+              8. 사회보험 적용
             </th>
             <td style={{ border: '1px solid #333', padding: '12px' }}>
               {insuranceList.length > 0 ? insuranceList.join(', ') + ' 가입' : '해당 없음'}
@@ -492,8 +596,16 @@ function ContractPreview({ contract }: { contract: ContractData }) {
       </table>
 
       <div style={{ marginTop: '24px', marginBottom: '24px' }}>
-        <h2 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px' }}>8. 기타</h2>
-        <ul style={{ paddingLeft: '20px', lineHeight: '1.8' }}>
+        <h2 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px' }}>9. 근로계약서 교부</h2>
+        <p style={{ lineHeight: '1.8', fontSize: '13px' }}>
+          사용자는 근로계약을 체결함과 동시에 본 계약서를 사본하여 근로자의 교부요구와 관계없이 
+          근로자에게 교부함 (근로기준법 제17조 이행)
+        </p>
+      </div>
+
+      <div style={{ marginTop: '24px', marginBottom: '24px' }}>
+        <h2 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px' }}>10. 기타</h2>
+        <ul style={{ paddingLeft: '20px', lineHeight: '1.8', fontSize: '13px' }}>
           <li>본 계약에 명시되지 않은 사항은 근로기준법 및 관계 법령에 따른다.</li>
           <li>사용자와 근로자는 본 계약의 내용을 성실히 이행하여야 한다.</li>
           <li>본 계약서는 2부를 작성하여 사용자와 근로자가 각각 1부씩 보관한다.</li>
@@ -510,16 +622,20 @@ function ContractPreview({ contract }: { contract: ContractData }) {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <tbody>
               <tr>
-                <td style={{ padding: '4px 0', width: '80px' }}>상 호:</td>
+                <td style={{ padding: '4px 0', width: '100px' }}>사업체명:</td>
                 <td style={{ padding: '4px 0' }}>{contract.company.name}</td>
               </tr>
               <tr>
-                <td style={{ padding: '4px 0' }}>주 소:</td>
+                <td style={{ padding: '4px 0' }}>사업자번호:</td>
+                <td style={{ padding: '4px 0' }}>{formatBusinessNumber(contract.company.businessNumber)}</td>
+              </tr>
+              <tr>
+                <td style={{ padding: '4px 0' }}>소 재 지:</td>
                 <td style={{ padding: '4px 0' }}>{contract.company.address}</td>
               </tr>
               <tr>
-                <td style={{ padding: '4px 0' }}>대표자:</td>
-                <td style={{ padding: '4px 0' }}>{contract.company.ceoName} (인)</td>
+                <td style={{ padding: '4px 0' }}>대 표 자:</td>
+                <td style={{ padding: '4px 0' }}>{contract.company.ceoName} (서명 또는 인)</td>
               </tr>
             </tbody>
           </table>
@@ -541,8 +657,8 @@ function ContractPreview({ contract }: { contract: ContractData }) {
                 <td style={{ padding: '4px 0' }}>{contract.employee.address}</td>
               </tr>
               <tr>
-                <td style={{ padding: '4px 0' }}>연락처:</td>
-                <td style={{ padding: '4px 0' }}>{contract.employee.phone} (인)</td>
+                <td style={{ padding: '4px 0' }}>연 락 처:</td>
+                <td style={{ padding: '4px 0' }}>{contract.employee.phone} (서명 또는 인)</td>
               </tr>
             </tbody>
           </table>
