@@ -3,7 +3,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { useReactToPrint } from 'react-to-print';
 import { CompanyInfo, EmployeeInfo } from '@/types';
-import { loadCompanyInfo, defaultCompanyInfo, formatDate, formatCurrency, formatBusinessNumber, formatPhoneNumber, formatResidentNumber } from '@/lib/storage';
+import { loadCompanyInfo, defaultCompanyInfo, formatDate, formatCurrency, formatBusinessNumber, formatResidentNumber } from '@/lib/storage';
+
+interface WorkSchedule {
+  day: string;
+  startTime: string;
+  endTime: string;
+  breakTime: number;
+  hours: number;
+}
 
 interface ParttimeContractData {
   company: CompanyInfo;
@@ -11,24 +19,31 @@ interface ParttimeContractData {
   contractDate: string;
   startDate: string;
   endDate: string;
+  isOpenEnded: boolean;
   workplace: string;
   jobDescription: string;
-  workStartTime: string;
-  workEndTime: string;
-  breakTime: number;
-  workDays: string[];
+  scheduleType: 'fixed' | 'flexible';
+  fixedSchedule: {
+    workStartTime: string;
+    workEndTime: string;
+    breakTime: number;
+    workDays: string[];
+  };
+  flexibleSchedule: WorkSchedule[];
   weeklyHours: number;
   weeklyHoliday: string;
   hourlyWage: number;
   weeklyAllowance: boolean;
   paymentMethod: string;
   paymentDate: number;
+  probationPeriod: number;
   insurance: {
     national: boolean;
     health: boolean;
     employment: boolean;
     industrial: boolean;
   };
+  specialTerms: string;
 }
 
 const defaultEmployee: EmployeeInfo = {
@@ -38,33 +53,48 @@ const defaultEmployee: EmployeeInfo = {
   phone: '',
 };
 
+const WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일'];
+
+const defaultFlexibleSchedule: WorkSchedule[] = WEEKDAYS.map(day => ({
+  day,
+  startTime: '',
+  endTime: '',
+  breakTime: 0,
+  hours: 0
+}));
+
 const defaultContract: ParttimeContractData = {
   company: defaultCompanyInfo,
   employee: defaultEmployee,
   contractDate: new Date().toISOString().split('T')[0],
   startDate: '',
   endDate: '',
+  isOpenEnded: false,
   workplace: '',
   jobDescription: '',
-  workStartTime: '09:00',
-  workEndTime: '14:00',
-  breakTime: 30,
-  workDays: ['월', '수', '금'],
+  scheduleType: 'fixed',
+  fixedSchedule: {
+    workStartTime: '09:00',
+    workEndTime: '14:00',
+    breakTime: 30,
+    workDays: ['월', '수', '금'],
+  },
+  flexibleSchedule: defaultFlexibleSchedule,
   weeklyHours: 15,
   weeklyHoliday: '매주 일요일',
   hourlyWage: 10030,  // 2026년 최저임금
   weeklyAllowance: true,
   paymentMethod: '근로자 명의 예금통장에 입금',
   paymentDate: 10,
+  probationPeriod: 0,
   insurance: {
     national: false,
     health: false,
     employment: true,
     industrial: true,
   },
+  specialTerms: '',
 };
-
-const WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일'];
 
 export default function ParttimeContractPage() {
   const [contract, setContract] = useState<ParttimeContractData>(defaultContract);
@@ -82,9 +112,23 @@ export default function ParttimeContractPage() {
     }
   }, []);
 
+  // 주간 근로시간 자동 계산
+  useEffect(() => {
+    if (contract.scheduleType === 'fixed') {
+      const start = contract.fixedSchedule.workStartTime.split(':').map(Number);
+      const end = contract.fixedSchedule.workEndTime.split(':').map(Number);
+      const dailyMinutes = (end[0] * 60 + end[1]) - (start[0] * 60 + start[1]) - contract.fixedSchedule.breakTime;
+      const weeklyHours = (dailyMinutes * contract.fixedSchedule.workDays.length) / 60;
+      setContract(prev => ({ ...prev, weeklyHours: Math.round(weeklyHours * 10) / 10 }));
+    } else {
+      const totalHours = contract.flexibleSchedule.reduce((sum, s) => sum + (s.hours || 0), 0);
+      setContract(prev => ({ ...prev, weeklyHours: totalHours }));
+    }
+  }, [contract.scheduleType, contract.fixedSchedule, contract.flexibleSchedule]);
+
   const handlePrint = useReactToPrint({
     contentRef: printRef,
-    documentTitle: `파트타임_근로계약서_${contract.employee.name || '이름없음'}`,
+    documentTitle: `단시간근로자_근로계약서_${contract.employee.name || '이름없음'}`,
   });
 
   const updateContract = (field: string, value: unknown) => {
@@ -98,43 +142,68 @@ export default function ParttimeContractPage() {
     }));
   };
 
+  const updateFixedSchedule = (field: string, value: unknown) => {
+    setContract(prev => ({
+      ...prev,
+      fixedSchedule: { ...prev.fixedSchedule, [field]: value }
+    }));
+  };
+
   const toggleWorkDay = (day: string) => {
     setContract(prev => ({
       ...prev,
-      workDays: prev.workDays.includes(day)
-        ? prev.workDays.filter(d => d !== day)
-        : [...prev.workDays, day]
+      fixedSchedule: {
+        ...prev.fixedSchedule,
+        workDays: prev.fixedSchedule.workDays.includes(day)
+          ? prev.fixedSchedule.workDays.filter(d => d !== day)
+          : [...prev.fixedSchedule.workDays, day]
+      }
     }));
   };
 
-  const toggleInsurance = (type: keyof typeof contract.insurance) => {
+  const updateFlexibleSchedule = (index: number, field: keyof WorkSchedule, value: string | number) => {
+    setContract(prev => {
+      const newSchedule = [...prev.flexibleSchedule];
+      newSchedule[index] = { ...newSchedule[index], [field]: value };
+      
+      // 시간 자동 계산
+      if (newSchedule[index].startTime && newSchedule[index].endTime) {
+        const start = newSchedule[index].startTime.split(':').map(Number);
+        const end = newSchedule[index].endTime.split(':').map(Number);
+        const minutes = (end[0] * 60 + end[1]) - (start[0] * 60 + start[1]) - (newSchedule[index].breakTime || 0);
+        newSchedule[index].hours = Math.round(minutes / 60 * 10) / 10;
+      }
+      
+      return { ...prev, flexibleSchedule: newSchedule };
+    });
+  };
+
+  const toggleInsurance = (key: keyof typeof contract.insurance) => {
     setContract(prev => ({
       ...prev,
-      insurance: { ...prev.insurance, [type]: !prev.insurance[type] }
+      insurance: { ...prev.insurance, [key]: !prev.insurance[key] }
     }));
   };
-
-  // 예상 월급 계산
-  const estimatedMonthly = contract.hourlyWage * contract.weeklyHours * 4.345;
-  const weeklyAllowanceAmount = contract.weeklyAllowance && contract.weeklyHours >= 15
-    ? contract.hourlyWage * 8 * 4.345
-    : 0;
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">⏰ 파트타임 근로계약서</h1>
-          <p className="text-gray-500 mt-1">단시간 근로자 근로계약서를 작성합니다.</p>
+          <h1 className="text-2xl font-bold text-purple-800">📄 단시간 근로자 계약서</h1>
+          <p className="text-gray-500 mt-1">알바, 파트타임용 (주 40시간 미만)</p>
         </div>
         <div className="flex gap-2">
           <button
             onClick={() => setShowPreview(!showPreview)}
             className="btn-secondary"
           >
-            {showPreview ? '✏️ 수정하기' : '👁️ 미리보기'}
+            {showPreview ? '✏️ 수정' : '👁️ 미리보기'}
           </button>
-          <button onClick={() => handlePrint()} className="btn-primary">
+          <button
+            onClick={() => handlePrint()}
+            className="btn-primary bg-purple-600 hover:bg-purple-700"
+            disabled={!contract.employee.name}
+          >
             🖨️ 인쇄/PDF
           </button>
         </div>
@@ -143,30 +212,27 @@ export default function ParttimeContractPage() {
       {!showPreview ? (
         <div className="space-y-6">
           {/* 회사 정보 */}
-          <div className="form-section">
-            <h2 className="form-section-title">🏢 사용자(회사) 정보</h2>
+          <div className="form-section border-purple-200">
+            <h2 className="form-section-title text-purple-800">🏢 사용자(회사) 정보</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="input-label">상호</label>
+                <label className="input-label">회사명</label>
                 <input type="text" className="input-field bg-gray-50" value={contract.company.name} readOnly />
               </div>
               <div>
-                <label className="input-label">대표자</label>
-                <input type="text" className="input-field bg-gray-50" value={contract.company.ceoName} readOnly />
+                <label className="input-label">사업자등록번호</label>
+                <input type="text" className="input-field bg-gray-50" value={formatBusinessNumber(contract.company.businessNumber)} readOnly />
               </div>
               <div className="md:col-span-2">
                 <label className="input-label">주소</label>
                 <input type="text" className="input-field bg-gray-50" value={contract.company.address} readOnly />
               </div>
             </div>
-            <p className="text-sm text-gray-400 mt-2">
-              💡 회사 정보는 <a href="/settings" className="text-blue-500 underline">설정</a>에서 수정할 수 있습니다.
-            </p>
           </div>
 
           {/* 근로자 정보 */}
-          <div className="form-section">
-            <h2 className="form-section-title">👤 근로자 정보</h2>
+          <div className="form-section border-purple-200">
+            <h2 className="form-section-title text-purple-800">👤 근로자 정보</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="input-label">성명 *</label>
@@ -205,16 +271,16 @@ export default function ParttimeContractPage() {
                   className="input-field"
                   placeholder="010-1234-5678"
                   value={contract.employee.phone}
-                  onChange={(e) => updateEmployee('phone', e.target.value)}
+                  onChange={(e) => updateEmployee('phone', e.target.value.replace(/[^0-9-]/g, '').slice(0, 13))}
                 />
               </div>
             </div>
           </div>
 
-          {/* 계약 기간 */}
-          <div className="form-section">
-            <h2 className="form-section-title">📅 계약 기간</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* 계약 정보 */}
+          <div className="form-section border-purple-200">
+            <h2 className="form-section-title text-purple-800">📅 계약 정보</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="input-label">계약 체결일 *</label>
                 <input
@@ -234,95 +300,205 @@ export default function ParttimeContractPage() {
                 />
               </div>
               <div>
-                <label className="input-label">근무 종료일</label>
-                <input
-                  type="date"
-                  className="input-field"
-                  value={contract.endDate}
-                  onChange={(e) => updateContract('endDate', e.target.value)}
-                />
+                <label className="flex items-center gap-2 mt-6">
+                  <input
+                    type="checkbox"
+                    checked={contract.isOpenEnded}
+                    onChange={(e) => updateContract('isOpenEnded', e.target.checked)}
+                    className="w-5 h-5 text-purple-600 rounded"
+                  />
+                  <span className="text-gray-700">기간의 정함이 없음</span>
+                </label>
               </div>
-              <div className="md:col-span-3">
+              {!contract.isOpenEnded && (
+                <div>
+                  <label className="input-label">근무 종료일</label>
+                  <input
+                    type="date"
+                    className="input-field"
+                    value={contract.endDate}
+                    onChange={(e) => updateContract('endDate', e.target.value)}
+                  />
+                </div>
+              )}
+              <div className="md:col-span-2">
                 <label className="input-label">근무 장소 *</label>
                 <input
                   type="text"
                   className="input-field"
+                  placeholder="본사 사무실, OO점 매장"
                   value={contract.workplace}
                   onChange={(e) => updateContract('workplace', e.target.value)}
                 />
               </div>
-              <div className="md:col-span-3">
+              <div className="md:col-span-2">
                 <label className="input-label">업무 내용 *</label>
                 <textarea
                   className="input-field min-h-[80px]"
-                  placeholder="예: 매장 판매 보조"
+                  placeholder="예: 매장 판매 및 고객 응대, 서빙 업무 등"
                   value={contract.jobDescription}
                   onChange={(e) => updateContract('jobDescription', e.target.value)}
                 />
               </div>
+              <div>
+                <label className="input-label">수습기간</label>
+                <select
+                  className="input-field"
+                  value={contract.probationPeriod}
+                  onChange={(e) => updateContract('probationPeriod', parseInt(e.target.value))}
+                >
+                  <option value={0}>없음</option>
+                  <option value={1}>1개월</option>
+                  <option value={2}>2개월</option>
+                  <option value={3}>3개월</option>
+                </select>
+              </div>
             </div>
           </div>
 
-          {/* 근로시간 */}
-          <div className="form-section">
-            <h2 className="form-section-title">⏰ 근로시간</h2>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <label className="input-label">시작 시간</label>
-                <input
-                  type="time"
-                  className="input-field"
-                  value={contract.workStartTime}
-                  onChange={(e) => updateContract('workStartTime', e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="input-label">종료 시간</label>
-                <input
-                  type="time"
-                  className="input-field"
-                  value={contract.workEndTime}
-                  onChange={(e) => updateContract('workEndTime', e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="input-label">휴게시간 (분)</label>
-                <input
-                  type="number"
-                  className="input-field"
-                  value={contract.breakTime}
-                  onChange={(e) => updateContract('breakTime', parseInt(e.target.value) || 0)}
-                />
-              </div>
-              <div>
-                <label className="input-label">주 소정근로시간</label>
-                <input
-                  type="number"
-                  className="input-field"
-                  value={contract.weeklyHours}
-                  onChange={(e) => updateContract('weeklyHours', parseInt(e.target.value) || 0)}
-                />
+          {/* 근로시간 - 고용노동부 필수 */}
+          <div className="form-section border-purple-200">
+            <h2 className="form-section-title text-purple-800">⏰ 근로일 및 근로시간 (필수)</h2>
+            <p className="text-sm text-gray-500 mb-4">
+              단시간 근로자는 근로일별 근로시간을 서면으로 명시해야 합니다. (근로기준법 제17조)
+            </p>
+
+            <div className="mb-4">
+              <label className="input-label">근무 형태</label>
+              <div className="flex gap-4 mt-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="scheduleType"
+                    checked={contract.scheduleType === 'fixed'}
+                    onChange={() => updateContract('scheduleType', 'fixed')}
+                    className="w-4 h-4 text-purple-600"
+                  />
+                  <span>고정 스케줄</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="scheduleType"
+                    checked={contract.scheduleType === 'flexible'}
+                    onChange={() => updateContract('scheduleType', 'flexible')}
+                    className="w-4 h-4 text-purple-600"
+                  />
+                  <span>요일별 상이</span>
+                </label>
               </div>
             </div>
-            <div className="mt-4">
-              <label className="input-label">근무 요일</label>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {WEEKDAYS.map(day => (
-                  <button
-                    key={day}
-                    type="button"
-                    onClick={() => toggleWorkDay(day)}
-                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                      contract.workDays.includes(day)
-                        ? 'bg-purple-500 text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                  >
-                    {day}
-                  </button>
-                ))}
+
+            {contract.scheduleType === 'fixed' ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="input-label">시작 시간</label>
+                    <input
+                      type="time"
+                      className="input-field"
+                      value={contract.fixedSchedule.workStartTime}
+                      onChange={(e) => updateFixedSchedule('workStartTime', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="input-label">종료 시간</label>
+                    <input
+                      type="time"
+                      className="input-field"
+                      value={contract.fixedSchedule.workEndTime}
+                      onChange={(e) => updateFixedSchedule('workEndTime', e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="input-label">휴게시간 (분)</label>
+                    <input
+                      type="number"
+                      className="input-field"
+                      value={contract.fixedSchedule.breakTime}
+                      onChange={(e) => updateFixedSchedule('breakTime', parseInt(e.target.value) || 0)}
+                    />
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <label className="input-label">근무 요일</label>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {WEEKDAYS.map(day => (
+                      <button
+                        key={day}
+                        type="button"
+                        onClick={() => toggleWorkDay(day)}
+                        className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                          contract.fixedSchedule.workDays.includes(day)
+                            ? 'bg-purple-500 text-white'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        {day}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="bg-purple-50">
+                      <th className="border p-2 text-left">요일</th>
+                      <th className="border p-2">시작</th>
+                      <th className="border p-2">종료</th>
+                      <th className="border p-2">휴게(분)</th>
+                      <th className="border p-2">근로시간</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {contract.flexibleSchedule.map((schedule, index) => (
+                      <tr key={schedule.day}>
+                        <td className="border p-2 font-medium">{schedule.day}요일</td>
+                        <td className="border p-2">
+                          <input
+                            type="time"
+                            className="input-field py-1"
+                            value={schedule.startTime}
+                            onChange={(e) => updateFlexibleSchedule(index, 'startTime', e.target.value)}
+                          />
+                        </td>
+                        <td className="border p-2">
+                          <input
+                            type="time"
+                            className="input-field py-1"
+                            value={schedule.endTime}
+                            onChange={(e) => updateFlexibleSchedule(index, 'endTime', e.target.value)}
+                          />
+                        </td>
+                        <td className="border p-2">
+                          <input
+                            type="number"
+                            className="input-field py-1 w-20"
+                            value={schedule.breakTime || ''}
+                            onChange={(e) => updateFlexibleSchedule(index, 'breakTime', parseInt(e.target.value) || 0)}
+                          />
+                        </td>
+                        <td className="border p-2 text-center font-medium text-purple-600">
+                          {schedule.hours > 0 ? `${schedule.hours}시간` : '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
+            )}
+
+            <div className="mt-4 p-4 bg-purple-50 rounded-lg">
+              <p className="text-purple-800 font-medium">
+                📊 주 소정근로시간: <strong>{contract.weeklyHours}시간</strong>
+                {contract.weeklyHours >= 15 && (
+                  <span className="text-green-600 ml-2">✓ 주휴수당 발생</span>
+                )}
+              </p>
             </div>
+
             <div className="mt-4">
               <label className="input-label">주휴일 *</label>
               <select
@@ -332,18 +508,14 @@ export default function ParttimeContractPage() {
               >
                 <option value="매주 일요일">매주 일요일</option>
                 <option value="매주 토요일">매주 토요일</option>
-                <option value="매주 토요일, 일요일">매주 토요일, 일요일</option>
                 <option value="주 1회 (별도 지정)">주 1회 (별도 지정)</option>
               </select>
-              <p className="text-sm text-gray-400 mt-1">
-                주 15시간 이상 근무 시 유급 주휴일 부여 (근로기준법 제55조)
-              </p>
             </div>
           </div>
 
           {/* 급여 */}
-          <div className="form-section">
-            <h2 className="form-section-title">💰 급여</h2>
+          <div className="form-section border-purple-200">
+            <h2 className="form-section-title text-purple-800">💰 임금</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="input-label">시급 (원) *</label>
@@ -354,7 +526,23 @@ export default function ParttimeContractPage() {
                   value={contract.hourlyWage || ''}
                   onChange={(e) => updateContract('hourlyWage', parseInt(e.target.value) || 0)}
                 />
-                <p className="text-sm text-gray-400 mt-1">2026년 최저시급: 10,030원</p>
+                <p className="text-xs text-purple-600 mt-1 font-medium">
+                  2026년 최저시급: 10,030원 
+                  {contract.hourlyWage < 10030 && contract.hourlyWage > 0 && (
+                    <span className="text-red-500 ml-2">⚠️ 최저임금 미달!</span>
+                  )}
+                </p>
+              </div>
+              <div>
+                <label className="input-label">지급방법 *</label>
+                <select
+                  className="input-field"
+                  value={contract.paymentMethod}
+                  onChange={(e) => updateContract('paymentMethod', e.target.value)}
+                >
+                  <option value="근로자 명의 예금통장에 입금">예금통장 입금</option>
+                  <option value="현금 직접 지급">현금 직접 지급</option>
+                </select>
               </div>
               <div>
                 <label className="input-label">급여 지급일</label>
@@ -368,50 +556,43 @@ export default function ParttimeContractPage() {
                   ))}
                 </select>
               </div>
-              <div>
-                <label className="input-label">지급방법 *</label>
-                <select
-                  className="input-field"
-                  value={contract.paymentMethod}
-                  onChange={(e) => updateContract('paymentMethod', e.target.value)}
-                >
-                  <option value="근로자 명의 예금통장에 입금">근로자 명의 예금통장에 입금</option>
-                  <option value="현금 직접 지급">현금 직접 지급</option>
-                </select>
-              </div>
-              <div className="md:col-span-2">
-                <label className="flex items-center gap-2 cursor-pointer">
+              <div className="flex items-center">
+                <label className="flex items-center gap-2 cursor-pointer mt-6">
                   <input
                     type="checkbox"
                     checked={contract.weeklyAllowance}
                     onChange={(e) => updateContract('weeklyAllowance', e.target.checked)}
                     className="w-5 h-5 text-purple-600 rounded"
                   />
-                  <span className="text-gray-700">주휴수당 지급 (주 15시간 이상 근무 시)</span>
+                  <span className="text-gray-700">주휴수당 지급</span>
                 </label>
+                <span className="text-xs text-gray-400 ml-2">(주 15시간 이상 시 필수)</span>
               </div>
             </div>
-            
+
             {/* 예상 급여 계산 */}
-            <div className="mt-4 p-4 bg-purple-50 rounded-lg">
-              <h4 className="font-medium text-purple-800 mb-2">📊 예상 월급여</h4>
-              <div className="text-sm text-purple-700 space-y-1">
-                <p>기본급: {formatCurrency(Math.round(estimatedMonthly))}</p>
+            <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+              <p className="text-gray-700 font-medium mb-2">💵 예상 월급 (4주 기준)</p>
+              <div className="text-sm text-gray-600">
+                <p>• 기본급: {formatCurrency(contract.hourlyWage * contract.weeklyHours * 4)}</p>
                 {contract.weeklyAllowance && contract.weeklyHours >= 15 && (
-                  <p>주휴수당: {formatCurrency(Math.round(weeklyAllowanceAmount))}</p>
+                  <p>• 주휴수당: {formatCurrency(contract.hourlyWage * (contract.weeklyHours / 5) * 4)} (주 {(contract.weeklyHours / 5).toFixed(1)}시간 × 4주)</p>
                 )}
-                <p className="font-bold text-lg pt-2 border-t border-purple-200">
-                  합계: {formatCurrency(Math.round(estimatedMonthly + weeklyAllowanceAmount))}
+                <p className="font-bold text-purple-700 mt-2">
+                  합계: {formatCurrency(
+                    contract.hourlyWage * contract.weeklyHours * 4 + 
+                    (contract.weeklyAllowance && contract.weeklyHours >= 15 ? contract.hourlyWage * (contract.weeklyHours / 5) * 4 : 0)
+                  )}
                 </p>
               </div>
             </div>
           </div>
 
           {/* 4대보험 */}
-          <div className="form-section">
-            <h2 className="form-section-title">🏥 4대보험 가입</h2>
+          <div className="form-section border-purple-200">
+            <h2 className="form-section-title text-purple-800">🏥 사회보험</h2>
             <p className="text-sm text-gray-500 mb-4">
-              단시간 근로자는 월 60시간 이상 근무 시 국민연금·건강보험 의무가입
+              ※ 월 60시간(주 15시간) 이상 근무 시 국민연금·건강보험 의무가입
             </p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[
@@ -420,7 +601,7 @@ export default function ParttimeContractPage() {
                 { key: 'employment', label: '고용보험' },
                 { key: 'industrial', label: '산재보험' },
               ].map(item => (
-                <label key={item.key} className="flex items-center gap-2 cursor-pointer">
+                <label key={item.key} className="flex items-center gap-2 cursor-pointer p-3 bg-gray-50 rounded-lg">
                   <input
                     type="checkbox"
                     checked={contract.insurance[item.key as keyof typeof contract.insurance]}
@@ -431,6 +612,17 @@ export default function ParttimeContractPage() {
                 </label>
               ))}
             </div>
+          </div>
+
+          {/* 특약사항 */}
+          <div className="form-section border-purple-200">
+            <h2 className="form-section-title text-purple-800">📋 특약사항</h2>
+            <textarea
+              className="input-field min-h-[80px]"
+              placeholder="예: 근무일 변경 시 3일 전 통보, 업무복 지급 등"
+              value={contract.specialTerms}
+              onChange={(e) => updateContract('specialTerms', e.target.value)}
+            />
           </div>
         </div>
       ) : (
@@ -456,170 +648,340 @@ function ParttimeContractPreview({ contract }: { contract: ParttimeContractData 
   if (contract.insurance.industrial) insuranceList.push('산재보험');
 
   // 연차휴가 비례 계산 (주 15시간 이상일 경우)
-  const annualLeaveRatio = contract.weeklyHours >= 15 ? (contract.weeklyHours / 40 * 15).toFixed(1) : 0;
+  const annualLeaveRatio = contract.weeklyHours >= 15 ? (contract.weeklyHours / 40 * 15) : 0;
+
+  const cellStyle = { border: '1px solid #d1d5db', padding: '10px 14px', verticalAlign: 'top' as const };
+  const headerStyle = { ...cellStyle, backgroundColor: '#faf5ff', fontWeight: 600, width: '140px', color: '#6b21a8' };
+  const sectionHeaderStyle = { 
+    backgroundColor: '#7c3aed', 
+    color: 'white', 
+    padding: '10px 14px', 
+    fontWeight: 600,
+    fontSize: '13px',
+    letterSpacing: '0.5px'
+  };
 
   return (
-    <div className="contract-document p-8" style={{ fontFamily: "'Nanum Gothic', sans-serif" }}>
-      <h1 style={{ fontSize: '24px', fontWeight: 'bold', textAlign: 'center', marginBottom: '8px' }}>
-        단시간 근로자 근로계약서
-      </h1>
-      <p style={{ fontSize: '12px', textAlign: 'center', color: '#666', marginBottom: '32px' }}>
-        (근로기준법 제17조, 제18조에 의한 근로조건 명시)
-      </p>
+    <div className="contract-document" style={{ fontFamily: "'Pretendard', 'Nanum Gothic', sans-serif", color: '#1f2937', lineHeight: 1.6 }}>
+      {/* 헤더 */}
+      <div style={{ textAlign: 'center', marginBottom: '32px', borderBottom: '3px solid #7c3aed', paddingBottom: '20px' }}>
+        <h1 style={{ fontSize: '26px', fontWeight: 700, color: '#7c3aed', marginBottom: '8px', letterSpacing: '1px' }}>
+          단시간 근로자 근로계약서
+        </h1>
+        <p style={{ fontSize: '13px', color: '#6b7280' }}>
+          Part-time Employment Contract (근로기준법 제17조, 제18조)
+        </p>
+      </div>
 
-      <p style={{ marginBottom: '24px', lineHeight: '1.8' }}>
-        <strong>{contract.company.name}</strong>(이하 &quot;사용자&quot;라 함)과(와) 
-        <strong> {contract.employee.name}</strong>(이하 &quot;근로자&quot;라 함)은(는) 다음과 같이 근로계약을 체결한다.
-      </p>
+      {/* 서문 */}
+      <div style={{ backgroundColor: '#faf5ff', padding: '16px 20px', borderRadius: '8px', marginBottom: '24px', border: '1px solid #e9d5ff' }}>
+        <p style={{ fontSize: '14px', lineHeight: 1.8 }}>
+          <strong style={{ color: '#7c3aed' }}>{contract.company.name}</strong> (이하 "사용자"라 함)과 
+          <strong style={{ color: '#7c3aed' }}> {contract.employee.name}</strong> (이하 "근로자"라 함)은 
+          다음과 같이 단시간 근로계약을 체결한다.
+        </p>
+      </div>
 
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '24px' }}>
+      {/* 제1조 계약기간 및 근무 */}
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '20px' }}>
+        <thead>
+          <tr>
+            <th colSpan={2} style={sectionHeaderStyle}>제1조 [계약기간 및 업무]</th>
+          </tr>
+        </thead>
         <tbody>
           <tr>
-            <th style={{ border: '1px solid #333', padding: '12px', backgroundColor: '#f3f4f6', width: '25%', textAlign: 'left' }}>
-              1. 계약기간
-            </th>
-            <td style={{ border: '1px solid #333', padding: '12px' }}>
-              {formatDate(contract.startDate)} ~ {contract.endDate ? formatDate(contract.endDate) : '별도 합의시까지'}
+            <th style={headerStyle}>계약기간</th>
+            <td style={cellStyle}>
+              <strong>{formatDate(contract.startDate)}</strong> ~ {' '}
+              {contract.isOpenEnded ? (
+                <strong>정함이 없음</strong>
+              ) : (
+                <strong>{formatDate(contract.endDate)}</strong>
+              )}
+              {contract.probationPeriod > 0 && (
+                <><br /><span style={{ color: '#6b7280', fontSize: '13px' }}>
+                  ※ 수습기간: {contract.probationPeriod}개월
+                </span></>
+              )}
             </td>
           </tr>
           <tr>
-            <th style={{ border: '1px solid #333', padding: '12px', backgroundColor: '#f3f4f6', textAlign: 'left' }}>
-              2. 근무장소
-            </th>
-            <td style={{ border: '1px solid #333', padding: '12px' }}>
-              {contract.workplace}
-            </td>
+            <th style={headerStyle}>근무장소</th>
+            <td style={cellStyle}>{contract.workplace}</td>
           </tr>
           <tr>
-            <th style={{ border: '1px solid #333', padding: '12px', backgroundColor: '#f3f4f6', textAlign: 'left' }}>
-              3. 업무내용
-            </th>
-            <td style={{ border: '1px solid #333', padding: '12px' }}>
-              {contract.jobDescription}
+            <th style={headerStyle}>담당업무</th>
+            <td style={cellStyle}>{contract.jobDescription}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* 제2조 근로일 및 근로시간 - 핵심! */}
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '20px' }}>
+        <thead>
+          <tr>
+            <th colSpan={2} style={sectionHeaderStyle}>제2조 [근로일 및 근로시간] ★ 필수 명시사항</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td colSpan={2} style={cellStyle}>
+              {contract.scheduleType === 'fixed' ? (
+                <>
+                  <p style={{ marginBottom: '12px' }}>
+                    <strong>• 근무시간:</strong> {contract.fixedSchedule.workStartTime} ~ {contract.fixedSchedule.workEndTime}
+                  </p>
+                  <p style={{ marginBottom: '12px' }}>
+                    <strong>• 휴게시간:</strong> {contract.fixedSchedule.breakTime}분
+                  </p>
+                  <p style={{ marginBottom: '12px' }}>
+                    <strong>• 근무요일:</strong> {contract.fixedSchedule.workDays.join(', ')} (주 {contract.fixedSchedule.workDays.length}일)
+                  </p>
+                </>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '12px' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f5f3ff' }}>
+                      <th style={{ border: '1px solid #d1d5db', padding: '8px' }}>요일</th>
+                      <th style={{ border: '1px solid #d1d5db', padding: '8px' }}>근무시간</th>
+                      <th style={{ border: '1px solid #d1d5db', padding: '8px' }}>휴게</th>
+                      <th style={{ border: '1px solid #d1d5db', padding: '8px' }}>근로시간</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {contract.flexibleSchedule.filter(s => s.startTime && s.endTime).map(schedule => (
+                      <tr key={schedule.day}>
+                        <td style={{ border: '1px solid #d1d5db', padding: '8px', textAlign: 'center' }}>{schedule.day}요일</td>
+                        <td style={{ border: '1px solid #d1d5db', padding: '8px', textAlign: 'center' }}>
+                          {schedule.startTime} ~ {schedule.endTime}
+                        </td>
+                        <td style={{ border: '1px solid #d1d5db', padding: '8px', textAlign: 'center' }}>{schedule.breakTime}분</td>
+                        <td style={{ border: '1px solid #d1d5db', padding: '8px', textAlign: 'center', fontWeight: 600 }}>{schedule.hours}시간</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              <p style={{ backgroundColor: '#faf5ff', padding: '10px', borderRadius: '4px', fontWeight: 600, color: '#7c3aed' }}>
+                📊 주 소정근로시간: {contract.weeklyHours}시간
+              </p>
             </td>
           </tr>
+        </tbody>
+      </table>
+
+      {/* 제3조 휴일 및 휴가 */}
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '20px' }}>
+        <thead>
           <tr>
-            <th style={{ border: '1px solid #333', padding: '12px', backgroundColor: '#f3f4f6', textAlign: 'left' }}>
-              4. 소정근로시간
-            </th>
-            <td style={{ border: '1px solid #333', padding: '12px' }}>
-              <strong>• 근무시간:</strong> {contract.workStartTime} ~ {contract.workEndTime}<br />
-              <strong>• 휴게시간:</strong> {contract.breakTime}분<br />
-              <strong>• 근무요일:</strong> {contract.workDays.join(', ')} (주 {contract.workDays.length}일)<br />
-              <strong>• 주 소정근로시간:</strong> {contract.weeklyHours}시간
-            </td>
+            <th colSpan={2} style={sectionHeaderStyle}>제3조 [휴일 및 휴가] (근로기준법 제55조, 제18조)</th>
           </tr>
+        </thead>
+        <tbody>
           <tr>
-            <th style={{ border: '1px solid #333', padding: '12px', backgroundColor: '#f3f4f6', textAlign: 'left' }}>
-              5. 휴일<br/><span style={{ fontSize: '11px', fontWeight: 'normal' }}>(근로기준법 제55조)</span>
-            </th>
-            <td style={{ border: '1px solid #333', padding: '12px' }}>
-              <strong>• 주휴일:</strong> {contract.weeklyHoliday} {contract.weeklyHours >= 15 ? '(유급)' : '(무급)'}<br />
-              <span style={{ fontSize: '11px', color: '#666' }}>
+            <th style={headerStyle}>주휴일</th>
+            <td style={cellStyle}>
+              <strong>{contract.weeklyHoliday}</strong> {contract.weeklyHours >= 15 ? '(유급)' : '(무급)'}
+              <br />
+              <span style={{ color: '#6b7280', fontSize: '13px' }}>
                 ※ 주 15시간 이상 근무 시 유급 주휴일 부여
               </span>
             </td>
           </tr>
           <tr>
-            <th style={{ border: '1px solid #333', padding: '12px', backgroundColor: '#f3f4f6', textAlign: 'left' }}>
-              6. 연차유급휴가<br/><span style={{ fontSize: '11px', fontWeight: 'normal' }}>(근로기준법 제18조)</span>
-            </th>
-            <td style={{ border: '1px solid #333', padding: '12px' }}>
-              {contract.weeklyHours >= 15 
-                ? <>통상 근로자의 근로시간에 비례하여 연 약 {annualLeaveRatio}일<br />
-                    <span style={{ fontSize: '11px', color: '#666' }}>※ 계산: 주 {contract.weeklyHours}시간 ÷ 40시간 × 15일</span></>
-                : '주 15시간 미만 근무로 미적용'}
+            <th style={headerStyle}>연차유급휴가</th>
+            <td style={cellStyle}>
+              {contract.weeklyHours >= 15 ? (
+                <>
+                  통상 근로자의 근로시간에 비례하여 <strong>연 약 {annualLeaveRatio.toFixed(1)}일</strong>
+                  <br />
+                  <span style={{ color: '#6b7280', fontSize: '13px' }}>
+                    ※ 산정: {contract.weeklyHours}시간 ÷ 40시간 × 15일 (근로기준법 제18조)
+                  </span>
+                </>
+              ) : (
+                '주 15시간 미만 근무로 미적용'
+              )}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* 제4조 임금 */}
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '20px' }}>
+        <thead>
+          <tr>
+            <th colSpan={2} style={sectionHeaderStyle}>제4조 [임금] (근로기준법 제17조)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th style={headerStyle}>시급</th>
+            <td style={cellStyle}>
+              <strong style={{ fontSize: '16px', color: '#7c3aed' }}>{formatCurrency(contract.hourlyWage)}</strong>
+              <br />
+              <span style={{ color: '#6b7280', fontSize: '13px' }}>
+                ※ 2026년 최저임금 10,030원 이상
+              </span>
             </td>
           </tr>
           <tr>
-            <th style={{ border: '1px solid #333', padding: '12px', backgroundColor: '#f3f4f6', textAlign: 'left' }}>
-              7. 임금
-            </th>
-            <td style={{ border: '1px solid #333', padding: '12px' }}>
-              <strong>• 시급:</strong> {formatCurrency(contract.hourlyWage)} (2026년 최저임금 10,030원 이상)<br />
-              <strong>• 주휴수당:</strong> {contract.weeklyAllowance && contract.weeklyHours >= 15 ? '지급 (주 15시간 이상 근무)' : '미지급'}<br />
-              <strong>• 지급일:</strong> 매월 {contract.paymentDate}일<br />
-              <strong>• 지급방법:</strong> {contract.paymentMethod}
+            <th style={headerStyle}>주휴수당</th>
+            <td style={cellStyle}>
+              {contract.weeklyAllowance && contract.weeklyHours >= 15 ? (
+                <>
+                  <strong>지급</strong> (주 15시간 이상 근무)
+                  <br />
+                  <span style={{ color: '#6b7280', fontSize: '13px' }}>
+                    ※ 주휴수당 = 시급 × (주 소정근로시간 ÷ 5)
+                  </span>
+                </>
+              ) : '미지급'}
             </td>
           </tr>
           <tr>
-            <th style={{ border: '1px solid #333', padding: '12px', backgroundColor: '#f3f4f6', textAlign: 'left' }}>
-              8. 사회보험 적용
-            </th>
-            <td style={{ border: '1px solid #333', padding: '12px' }}>
-              {insuranceList.length > 0 ? insuranceList.join(', ') + ' 가입' : '해당 없음'}<br />
-              <span style={{ fontSize: '11px', color: '#666' }}>
-                ※ 월 60시간 이상 근무 시 국민연금·건강보험 의무가입
+            <th style={headerStyle}>지급일</th>
+            <td style={cellStyle}>매월 <strong>{contract.paymentDate}일</strong></td>
+          </tr>
+          <tr>
+            <th style={headerStyle}>지급방법</th>
+            <td style={cellStyle}>{contract.paymentMethod}</td>
+          </tr>
+          <tr>
+            <th style={headerStyle}>초과근로</th>
+            <td style={cellStyle}>
+              <span style={{ color: '#6b7280', fontSize: '13px' }}>
+                소정근로시간을 초과하여 근로 시 통상임금의 50% 가산 지급 (근로기준법 제56조)
               </span>
             </td>
           </tr>
         </tbody>
       </table>
 
-      <div style={{ marginTop: '24px', marginBottom: '24px' }}>
-        <h2 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px' }}>9. 근로계약서 교부</h2>
-        <p style={{ lineHeight: '1.8', fontSize: '13px' }}>
-          사용자는 근로계약을 체결함과 동시에 본 계약서를 사본하여 근로자의 교부요구와 관계없이 
-          근로자에게 교부함 (근로기준법 제17조 이행)
+      {/* 제5조 사회보험 */}
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '20px' }}>
+        <thead>
+          <tr>
+            <th colSpan={2} style={sectionHeaderStyle}>제5조 [사회보험]</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th style={headerStyle}>가입보험</th>
+            <td style={cellStyle}>
+              {insuranceList.length > 0 ? insuranceList.join(', ') + ' 가입' : '해당 없음'}
+              <br />
+              <span style={{ color: '#6b7280', fontSize: '13px' }}>
+                ※ 월 60시간(주 15시간) 이상 근무 시 국민연금·건강보험 의무가입
+              </span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* 특약사항 */}
+      {contract.specialTerms && (
+        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '20px' }}>
+          <thead>
+            <tr>
+              <th colSpan={2} style={sectionHeaderStyle}>제6조 [특약사항]</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td colSpan={2} style={{ ...cellStyle, whiteSpace: 'pre-wrap' }}>
+                {contract.specialTerms}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      )}
+
+      {/* 계약서 교부 및 기타 */}
+      <div style={{ backgroundColor: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '8px', padding: '16px', marginBottom: '24px' }}>
+        <p style={{ fontSize: '13px', margin: 0 }}>
+          <strong style={{ color: '#92400e' }}>📋 근로계약서 교부 의무</strong><br />
+          사용자는 근로계약 체결 시 본 계약서를 근로자에게 즉시 교부하여야 한다. (근로기준법 제17조)
+          단시간 근로자의 근로조건은 통상 근로자의 근로시간을 기준으로 비례하여 결정한다. (제18조)
         </p>
       </div>
 
-      <div style={{ marginTop: '24px', marginBottom: '24px' }}>
-        <h2 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px' }}>10. 기타</h2>
-        <ul style={{ paddingLeft: '20px', lineHeight: '1.8', fontSize: '13px' }}>
-          <li>본 계약에 명시되지 않은 사항은 근로기준법 및 관계 법령에 따른다.</li>
-          <li>단시간 근로자의 근로조건은 그 사업장의 같은 종류의 업무에 종사하는 통상 근로자의 근로시간을 기준으로 산정한 비율에 따라 결정한다. (근로기준법 제18조)</li>
-          <li>본 계약서는 2부를 작성하여 사용자와 근로자가 각각 1부씩 보관한다.</li>
-        </ul>
+      <div style={{ fontSize: '13px', color: '#6b7280', marginBottom: '32px' }}>
+        <p style={{ marginBottom: '8px' }}>
+          • 본 계약에 명시되지 않은 사항은 근로기준법 및 관계 법령에 따른다.
+        </p>
+        <p>
+          • 본 계약서는 2부를 작성하여 사용자와 근로자가 각 1부씩 보관한다.
+        </p>
       </div>
 
-      <p style={{ textAlign: 'center', marginTop: '48px', marginBottom: '48px', fontSize: '14px' }}>
+      {/* 계약 체결일 */}
+      <p style={{ textAlign: 'center', fontSize: '15px', fontWeight: 600, marginBottom: '40px' }}>
         {formatDate(contract.contractDate)}
       </p>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '48px' }}>
-        <div style={{ width: '45%' }}>
-          <p style={{ fontWeight: 'bold', marginBottom: '8px' }}>[사용자]</p>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      {/* 서명란 */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '40px' }}>
+        {/* 사용자 */}
+        <div style={{ flex: 1, border: '1px solid #d1d5db', borderRadius: '8px', padding: '20px' }}>
+          <p style={{ fontWeight: 700, color: '#7c3aed', marginBottom: '16px', fontSize: '15px', borderBottom: '2px solid #7c3aed', paddingBottom: '8px' }}>
+            [ 사용자 ]
+          </p>
+          <table style={{ width: '100%' }}>
             <tbody>
               <tr>
-                <td style={{ padding: '4px 0', width: '100px' }}>사업체명:</td>
-                <td style={{ padding: '4px 0' }}>{contract.company.name}</td>
+                <td style={{ padding: '6px 0', width: '100px', color: '#6b7280' }}>사업체명</td>
+                <td style={{ padding: '6px 0', fontWeight: 500 }}>{contract.company.name}</td>
               </tr>
               <tr>
-                <td style={{ padding: '4px 0' }}>사업자번호:</td>
-                <td style={{ padding: '4px 0' }}>{formatBusinessNumber(contract.company.businessNumber)}</td>
+                <td style={{ padding: '6px 0', color: '#6b7280' }}>사업자번호</td>
+                <td style={{ padding: '6px 0' }}>{formatBusinessNumber(contract.company.businessNumber)}</td>
               </tr>
               <tr>
-                <td style={{ padding: '4px 0' }}>소 재 지:</td>
-                <td style={{ padding: '4px 0' }}>{contract.company.address}</td>
+                <td style={{ padding: '6px 0', color: '#6b7280' }}>소재지</td>
+                <td style={{ padding: '6px 0' }}>{contract.company.address}</td>
               </tr>
               <tr>
-                <td style={{ padding: '4px 0' }}>대 표 자:</td>
-                <td style={{ padding: '4px 0' }}>{contract.company.ceoName} (서명 또는 인)</td>
+                <td style={{ padding: '10px 0', color: '#6b7280' }}>대표자</td>
+                <td style={{ padding: '10px 0', fontWeight: 600 }}>
+                  {contract.company.ceoName} 
+                  <span style={{ color: '#9ca3af', marginLeft: '20px' }}>(서명 또는 인)</span>
+                </td>
               </tr>
             </tbody>
           </table>
         </div>
-        <div style={{ width: '45%' }}>
-          <p style={{ fontWeight: 'bold', marginBottom: '8px' }}>[근로자]</p>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+
+        {/* 근로자 */}
+        <div style={{ flex: 1, border: '1px solid #d1d5db', borderRadius: '8px', padding: '20px' }}>
+          <p style={{ fontWeight: 700, color: '#7c3aed', marginBottom: '16px', fontSize: '15px', borderBottom: '2px solid #7c3aed', paddingBottom: '8px' }}>
+            [ 근로자 ]
+          </p>
+          <table style={{ width: '100%' }}>
             <tbody>
               <tr>
-                <td style={{ padding: '4px 0', width: '80px' }}>성 명:</td>
-                <td style={{ padding: '4px 0' }}>{contract.employee.name}</td>
+                <td style={{ padding: '6px 0', width: '100px', color: '#6b7280' }}>성명</td>
+                <td style={{ padding: '6px 0', fontWeight: 500 }}>{contract.employee.name}</td>
               </tr>
               <tr>
-                <td style={{ padding: '4px 0' }}>주민번호:</td>
-                <td style={{ padding: '4px 0' }}>{formatResidentNumber(contract.employee.residentNumber)}</td>
+                <td style={{ padding: '6px 0', color: '#6b7280' }}>주민등록번호</td>
+                <td style={{ padding: '6px 0' }}>{formatResidentNumber(contract.employee.residentNumber)}</td>
               </tr>
               <tr>
-                <td style={{ padding: '4px 0' }}>주 소:</td>
-                <td style={{ padding: '4px 0' }}>{contract.employee.address}</td>
+                <td style={{ padding: '6px 0', color: '#6b7280' }}>주소</td>
+                <td style={{ padding: '6px 0' }}>{contract.employee.address}</td>
               </tr>
               <tr>
-                <td style={{ padding: '4px 0' }}>연 락 처:</td>
-                <td style={{ padding: '4px 0' }}>{contract.employee.phone} (서명 또는 인)</td>
+                <td style={{ padding: '6px 0', color: '#6b7280' }}>연락처</td>
+                <td style={{ padding: '6px 0' }}>{contract.employee.phone}</td>
+              </tr>
+              <tr>
+                <td style={{ padding: '10px 0', color: '#6b7280' }}>서명</td>
+                <td style={{ padding: '10px 0', fontWeight: 600 }}>
+                  {contract.employee.name}
+                  <span style={{ color: '#9ca3af', marginLeft: '20px' }}>(서명 또는 인)</span>
+                </td>
               </tr>
             </tbody>
           </table>
