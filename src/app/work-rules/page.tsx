@@ -71,6 +71,12 @@ interface WorkRulesData {
   
   // ========== 5인 미만 사업장 옵션 ==========
   isSmallBusiness: boolean;
+  
+  // ========== 별지 서식 옵션 ==========
+  includeAttendanceNotice: boolean;  // 인사위원회 출석통지서
+  includeStatementForm: boolean;     // 진술서
+  includeDisciplineResolution: boolean; // 징계의결서
+  includeDisciplineNotice: boolean;  // 징계처분 사유설명서
 }
 
 const defaultWorkRules: WorkRulesData = {
@@ -126,6 +132,11 @@ const defaultWorkRules: WorkRulesData = {
   shiftWorkType: '2조2교대',
   
   isSmallBusiness: false,
+  
+  includeAttendanceNotice: false,
+  includeStatementForm: false,
+  includeDisciplineResolution: false,
+  includeDisciplineNotice: false,
 };
 
 export default function WorkRulesPage() {
@@ -155,6 +166,7 @@ export default function WorkRulesPage() {
     { id: 'subsidy', label: '고용지원금', icon: '💵' },
     { id: 'flexible', label: '유연근무', icon: '🏠' },
     { id: 'discipline', label: '상벌', icon: '⚖️' },
+    { id: 'forms', label: '별지 서식', icon: '📎' },
   ];
 
   return (
@@ -830,6 +842,45 @@ export default function WorkRulesPage() {
                       • 해고: 근로계약 해지
                     </p>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* ========== 별지 서식 ========== */}
+            {activeSection === 'forms' && (
+              <div className="form-section">
+                <h2 className="form-section-title">📎 별지 서식 (선택)</h2>
+                <p className="text-sm text-gray-600 mb-4">
+                  인사위원회 운영 및 징계 절차에 필요한 서식입니다. 선택한 서식이 취업규칙 뒤에 첨부됩니다.
+                </p>
+
+                <div className="space-y-3">
+                  {[
+                    { id: 'includeAttendanceNotice', label: '인사위원회 출석통지서', desc: '징계대상자에게 인사위원회 출석을 통보하는 서식' },
+                    { id: 'includeStatementForm', label: '진술서', desc: '징계대상자가 서면으로 진술할 때 사용하는 서식' },
+                    { id: 'includeDisciplineResolution', label: '징계의결서', desc: '인사위원회에서 징계를 의결한 결과를 기록하는 서식' },
+                    { id: 'includeDisciplineNotice', label: '징계처분 사유설명서', desc: '징계 결과를 당사자에게 통보하는 서식' },
+                  ].map(form => (
+                    <label key={form.id} className="flex items-start gap-3 cursor-pointer p-4 border rounded-lg hover:bg-gray-50">
+                      <input
+                        type="checkbox"
+                        checked={rules[form.id as keyof WorkRulesData] as boolean}
+                        onChange={(e) => setRules(prev => ({ ...prev, [form.id]: e.target.checked }))}
+                        className="w-5 h-5 mt-0.5"
+                      />
+                      <div>
+                        <span className="font-semibold">{form.label}</span>
+                        <p className="text-sm text-gray-500 mt-1">{form.desc}</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+
+                <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <p className="text-sm text-blue-800">
+                    <strong>💡 안내:</strong> 별지 서식은 취업규칙 본문 뒤에 첨부되어 함께 출력됩니다.
+                    노동청 신고 시 별지 서식은 선택사항이며, 실제 인사위원회 운영 시 활용하시면 됩니다.
+                  </p>
                 </div>
               </div>
             )}
@@ -1618,6 +1669,191 @@ function WorkRulesPreview({ rules }: { rules: WorkRulesData }) {
           </>
         )}
       </div>
+
+      {/* ==================== 별지 서식 ==================== */}
+      {(rules.includeAttendanceNotice || rules.includeStatementForm || rules.includeDisciplineResolution || rules.includeDisciplineNotice) && (
+        <div style={{ pageBreakBefore: 'always' }}>
+          <h2 style={{ fontSize: '18px', fontWeight: 'bold', textAlign: 'center', marginTop: '40px', marginBottom: '30px' }}>
+            별 지 서 식
+          </h2>
+        </div>
+      )}
+
+      {/* 별지 1: 인사위원회 출석통지서 */}
+      {rules.includeAttendanceNotice && (
+        <div style={{ pageBreakBefore: 'always', padding: '20px' }}>
+          <h3 style={{ fontSize: '16px', fontWeight: 'bold', textAlign: 'center', marginBottom: '30px', borderBottom: '2px solid #333', paddingBottom: '10px' }}>
+            [별지 1] 인사위원회 출석통지서
+          </h3>
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '20px' }}>
+            <tbody>
+              <tr>
+                <td style={{ border: '1px solid #333', padding: '10px', width: '25%', backgroundColor: '#f5f5f5', fontWeight: 'bold' }}>성명</td>
+                <td style={{ border: '1px solid #333', padding: '10px', width: '25%' }}></td>
+                <td style={{ border: '1px solid #333', padding: '10px', width: '25%', backgroundColor: '#f5f5f5', fontWeight: 'bold' }}>소속</td>
+                <td style={{ border: '1px solid #333', padding: '10px', width: '25%' }}></td>
+              </tr>
+              <tr>
+                <td style={{ border: '1px solid #333', padding: '10px', backgroundColor: '#f5f5f5', fontWeight: 'bold' }}>직위(급)</td>
+                <td style={{ border: '1px solid #333', padding: '10px' }}></td>
+                <td style={{ border: '1px solid #333', padding: '10px', backgroundColor: '#f5f5f5', fontWeight: 'bold' }}>주소</td>
+                <td style={{ border: '1px solid #333', padding: '10px' }}></td>
+              </tr>
+              <tr>
+                <td style={{ border: '1px solid #333', padding: '10px', backgroundColor: '#f5f5f5', fontWeight: 'bold' }}>출석이유</td>
+                <td colSpan={3} style={{ border: '1px solid #333', padding: '10px', height: '60px' }}></td>
+              </tr>
+              <tr>
+                <td style={{ border: '1px solid #333', padding: '10px', backgroundColor: '#f5f5f5', fontWeight: 'bold' }}>출석일시</td>
+                <td colSpan={3} style={{ border: '1px solid #333', padding: '10px' }}>______년 ______월 ______일 ______시</td>
+              </tr>
+              <tr>
+                <td style={{ border: '1px solid #333', padding: '10px', backgroundColor: '#f5f5f5', fontWeight: 'bold' }}>출석장소</td>
+                <td colSpan={3} style={{ border: '1px solid #333', padding: '10px' }}></td>
+              </tr>
+            </tbody>
+          </table>
+          <div style={{ border: '1px solid #333', padding: '15px', marginBottom: '20px', backgroundColor: '#fafafa', fontSize: '10pt' }}>
+            <p style={{ fontWeight: 'bold', marginBottom: '10px' }}>유의사항</p>
+            <p>1. 진술을 위한 출석을 원하지 아니할 때에는 아래의 진술권 포기서를 즉시 제출할 것.</p>
+            <p>2. 사정에 의하여 서면진술을 하고자 할 때에는 인사위원회 개최일 전일까지 도착하도록 진술서를 제출할 것.</p>
+            <p>3. 정당한 사유서를 제출하지 아니하고 지정된 일시에 출석하지 아니하고, 서면진술서를 제출하지 아니하는 경우에는 진술할 의사가 없는 것으로 인정·처리함.</p>
+          </div>
+          <p style={{ textAlign: 'center', marginBottom: '30px' }}>
+            취업규칙 제67조의 규정에 의하여 위와 같이 귀하의 출석을 통지합니다.
+          </p>
+          <p style={{ textAlign: 'center', marginBottom: '20px' }}>______년 ______월 ______일</p>
+          <p style={{ textAlign: 'center', fontWeight: 'bold' }}>인사위원회 위원장 _________________ (직인)</p>
+          <p style={{ textAlign: 'center', marginTop: '20px' }}>_________________ 귀하</p>
+        </div>
+      )}
+
+      {/* 별지 2: 진술서 */}
+      {rules.includeStatementForm && (
+        <div style={{ pageBreakBefore: 'always', padding: '20px' }}>
+          <h3 style={{ fontSize: '16px', fontWeight: 'bold', textAlign: 'center', marginBottom: '30px', borderBottom: '2px solid #333', paddingBottom: '10px' }}>
+            [별지 2] 진술서
+          </h3>
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '20px' }}>
+            <tbody>
+              <tr>
+                <td style={{ border: '1px solid #333', padding: '10px', width: '20%', backgroundColor: '#f5f5f5', fontWeight: 'bold' }}>소속</td>
+                <td style={{ border: '1px solid #333', padding: '10px', width: '30%' }}></td>
+                <td style={{ border: '1px solid #333', padding: '10px', width: '20%', backgroundColor: '#f5f5f5', fontWeight: 'bold' }}>직위(급)</td>
+                <td style={{ border: '1px solid #333', padding: '10px', width: '30%' }}></td>
+              </tr>
+              <tr>
+                <td style={{ border: '1px solid #333', padding: '10px', backgroundColor: '#f5f5f5', fontWeight: 'bold' }}>성명</td>
+                <td style={{ border: '1px solid #333', padding: '10px' }}></td>
+                <td style={{ border: '1px solid #333', padding: '10px', backgroundColor: '#f5f5f5', fontWeight: 'bold' }}>제출기일</td>
+                <td style={{ border: '1px solid #333', padding: '10px' }}>______년 ______월 ______일</td>
+              </tr>
+              <tr>
+                <td style={{ border: '1px solid #333', padding: '10px', backgroundColor: '#f5f5f5', fontWeight: 'bold' }}>사건명</td>
+                <td colSpan={3} style={{ border: '1px solid #333', padding: '10px' }}></td>
+              </tr>
+              <tr>
+                <td style={{ border: '1px solid #333', padding: '10px', backgroundColor: '#f5f5f5', fontWeight: 'bold' }}>불참사유</td>
+                <td colSpan={3} style={{ border: '1px solid #333', padding: '10px', height: '60px' }}></td>
+              </tr>
+              <tr>
+                <td style={{ border: '1px solid #333', padding: '10px', backgroundColor: '#f5f5f5', fontWeight: 'bold' }}>진술내용</td>
+                <td colSpan={3} style={{ border: '1px solid #333', padding: '10px', height: '300px', verticalAlign: 'top' }}></td>
+              </tr>
+            </tbody>
+          </table>
+          <p style={{ textAlign: 'center', marginBottom: '30px', fontSize: '10pt' }}>
+            취업규칙 제67조의 규정에 의거 위와 같이 서면으로 진술하오며 만약 위 진술내용이 사실과 상이한 경우에는 여하한 처벌도 감수하겠습니다.
+          </p>
+          <p style={{ textAlign: 'center', marginBottom: '20px' }}>______년 ______월 ______일</p>
+          <p style={{ textAlign: 'center', fontWeight: 'bold' }}>성명 _________________ (인)</p>
+          <p style={{ textAlign: 'center', marginTop: '20px' }}>인사위원회 위원장 귀하</p>
+        </div>
+      )}
+
+      {/* 별지 3: 징계의결서 */}
+      {rules.includeDisciplineResolution && (
+        <div style={{ pageBreakBefore: 'always', padding: '20px' }}>
+          <h3 style={{ fontSize: '16px', fontWeight: 'bold', textAlign: 'center', marginBottom: '30px', borderBottom: '2px solid #333', paddingBottom: '10px' }}>
+            [별지 3] 징계의결서
+          </h3>
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '20px' }}>
+            <tbody>
+              <tr>
+                <td rowSpan={2} style={{ border: '1px solid #333', padding: '10px', width: '15%', backgroundColor: '#f5f5f5', fontWeight: 'bold', textAlign: 'center' }}>인적사항</td>
+                <td style={{ border: '1px solid #333', padding: '10px', width: '15%', backgroundColor: '#f5f5f5', fontWeight: 'bold' }}>소속</td>
+                <td style={{ border: '1px solid #333', padding: '10px', width: '20%' }}></td>
+                <td style={{ border: '1px solid #333', padding: '10px', width: '15%', backgroundColor: '#f5f5f5', fontWeight: 'bold' }}>직급</td>
+                <td style={{ border: '1px solid #333', padding: '10px', width: '15%' }}></td>
+                <td style={{ border: '1px solid #333', padding: '10px', width: '10%', backgroundColor: '#f5f5f5', fontWeight: 'bold' }}>성명</td>
+                <td style={{ border: '1px solid #333', padding: '10px', width: '10%' }}></td>
+              </tr>
+              <tr>
+                <td style={{ border: '1px solid #333', padding: '10px', backgroundColor: '#f5f5f5', fontWeight: 'bold' }}>주소</td>
+                <td colSpan={5} style={{ border: '1px solid #333', padding: '10px' }}></td>
+              </tr>
+              <tr>
+                <td style={{ border: '1px solid #333', padding: '10px', backgroundColor: '#f5f5f5', fontWeight: 'bold', textAlign: 'center' }}>의결주문</td>
+                <td colSpan={6} style={{ border: '1px solid #333', padding: '10px', height: '80px' }}></td>
+              </tr>
+              <tr>
+                <td style={{ border: '1px solid #333', padding: '10px', backgroundColor: '#f5f5f5', fontWeight: 'bold', textAlign: 'center' }}>의결이유</td>
+                <td colSpan={6} style={{ border: '1px solid #333', padding: '10px', height: '200px', verticalAlign: 'top' }}></td>
+              </tr>
+            </tbody>
+          </table>
+          <p style={{ textAlign: 'center', marginBottom: '20px' }}>______년 ______월 ______일</p>
+          <table style={{ width: '60%', margin: '0 auto', borderCollapse: 'collapse' }}>
+            <tbody>
+              <tr><td style={{ padding: '8px' }}>인사위원회</td><td style={{ padding: '8px' }}></td></tr>
+              <tr><td style={{ padding: '8px' }}>위 원 장</td><td style={{ padding: '8px' }}>_________________ (인)</td></tr>
+              <tr><td style={{ padding: '8px' }}>위    원</td><td style={{ padding: '8px' }}>_________________ (인)</td></tr>
+              <tr><td style={{ padding: '8px' }}>위    원</td><td style={{ padding: '8px' }}>_________________ (인)</td></tr>
+              <tr><td style={{ padding: '8px' }}>위    원</td><td style={{ padding: '8px' }}>_________________ (인)</td></tr>
+              <tr><td style={{ padding: '8px' }}>간    사</td><td style={{ padding: '8px' }}>_________________ (인)</td></tr>
+            </tbody>
+          </table>
+          <p style={{ textAlign: 'center', marginTop: '20px', fontSize: '10pt' }}>※ 징계이유에는 징계의 원인이 된 사실, 증거의 판단과 관계규정을 기재한다.</p>
+        </div>
+      )}
+
+      {/* 별지 4: 징계처분 사유설명서 */}
+      {rules.includeDisciplineNotice && (
+        <div style={{ pageBreakBefore: 'always', padding: '20px' }}>
+          <h3 style={{ fontSize: '16px', fontWeight: 'bold', textAlign: 'center', marginBottom: '30px', borderBottom: '2px solid #333', paddingBottom: '10px' }}>
+            [별지 4] 징계처분 사유설명서
+          </h3>
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '20px' }}>
+            <tbody>
+              <tr>
+                <td style={{ border: '1px solid #333', padding: '10px', width: '20%', backgroundColor: '#f5f5f5', fontWeight: 'bold' }}>소속</td>
+                <td style={{ border: '1px solid #333', padding: '10px', width: '30%' }}></td>
+                <td style={{ border: '1px solid #333', padding: '10px', width: '20%', backgroundColor: '#f5f5f5', fontWeight: 'bold' }}>직위(급)</td>
+                <td style={{ border: '1px solid #333', padding: '10px', width: '30%' }}></td>
+              </tr>
+              <tr>
+                <td style={{ border: '1px solid #333', padding: '10px', backgroundColor: '#f5f5f5', fontWeight: 'bold' }}>성명</td>
+                <td colSpan={3} style={{ border: '1px solid #333', padding: '10px' }}></td>
+              </tr>
+              <tr>
+                <td style={{ border: '1px solid #333', padding: '10px', backgroundColor: '#f5f5f5', fontWeight: 'bold' }}>주문</td>
+                <td colSpan={3} style={{ border: '1px solid #333', padding: '10px', height: '80px' }}></td>
+              </tr>
+              <tr>
+                <td style={{ border: '1px solid #333', padding: '10px', backgroundColor: '#f5f5f5', fontWeight: 'bold' }}>이유</td>
+                <td colSpan={3} style={{ border: '1px solid #333', padding: '10px', height: '200px', verticalAlign: 'top' }}>별첨 징계의결서 사본과 같음</td>
+              </tr>
+            </tbody>
+          </table>
+          <p style={{ textAlign: 'center', marginBottom: '30px' }}>위와 같이 처분하였음을 통지합니다.</p>
+          <p style={{ textAlign: 'center', marginBottom: '20px' }}>______년 ______월 ______일</p>
+          <p style={{ textAlign: 'center', fontWeight: 'bold' }}>처분권자 (처분제청권자) _________________ (직인)</p>
+          <p style={{ textAlign: 'center', marginTop: '20px' }}>_________________ 귀하</p>
+          <div style={{ marginTop: '30px', padding: '15px', border: '1px solid #333', backgroundColor: '#fafafa', fontSize: '10pt' }}>
+            <p><strong>참고:</strong> 이 처분에 대한 불복이 있을 때에는 취업규칙 제68조에 의하여 이 설명서를 받은 날로부터 7일 이내에 인사위원회에 재심을 청구할 수 있습니다.</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
