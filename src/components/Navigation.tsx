@@ -8,14 +8,31 @@ import { useState } from 'react';
 const menuItems = [
   { href: '/', label: '홈', icon: '🏠' },
   { href: '/employees', label: '직원관리', icon: '👥' },
-  { 
-    href: '/contract', 
+  {
+    href: '/contract',
     label: '계약서',
     icon: '📋',
     submenu: [
       { href: '/contract/fulltime', label: '정규직' },
       { href: '/contract/parttime', label: '파트타임' },
       { href: '/contract/freelancer', label: '프리랜서' },
+    ]
+  },
+  {
+    href: '/documents',
+    label: '노무서류',
+    icon: '📄',
+    submenu: [
+      { href: '/documents/privacy-consent', label: '개인정보동의서' },
+      { href: '/documents/nda', label: '비밀유지서약서' },
+      { href: '/documents/attendance', label: '출퇴근기록부' },
+      { href: '/documents/annual-leave', label: '연차관리대장' },
+      { href: '/documents/overtime', label: '시간외근로합의서' },
+      { href: '/documents/certificate', label: '재직증명서' },
+      { href: '/documents/career-certificate', label: '경력증명서' },
+      { href: '/documents/resignation', label: '사직서' },
+      { href: '/documents/retirement-pay', label: '퇴직금정산서' },
+      { href: '/documents/annual-leave-notice', label: '연차촉진통보서' },
     ]
   },
   { href: '/payslip', label: '급여명세서', icon: '💵' },
@@ -27,7 +44,7 @@ const menuItems = [
 export default function Navigation() {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [contractMenuOpen, setContractMenuOpen] = useState(false);
+  const [openSubmenu, setOpenSubmenu] = useState<string | null>(null);
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/';
@@ -57,13 +74,13 @@ export default function Navigation() {
             {menuItems.map((item) => (
               <div key={item.href} className="relative">
                 {item.submenu ? (
-                  <div 
-                    onMouseEnter={() => setContractMenuOpen(true)}
-                    onMouseLeave={() => setContractMenuOpen(false)}
+                  <div
+                    onMouseEnter={() => setOpenSubmenu(item.href)}
+                    onMouseLeave={() => setOpenSubmenu(null)}
                   >
                     <button
                       className={`nav-link ${
-                        isActive('/contract') ? 'nav-link-active' : ''
+                        isActive(item.href) ? 'nav-link-active' : ''
                       }`}
                     >
                       <span>{item.icon}</span>
@@ -72,7 +89,7 @@ export default function Navigation() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                       </svg>
                     </button>
-                    {contractMenuOpen && (
+                    {openSubmenu === item.href && (
                       <div className="absolute top-full left-0 pt-1 z-50">
                         <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg py-1 min-w-[140px] shadow-lg animate-fade-in">
                           {item.submenu.map((sub) => (
