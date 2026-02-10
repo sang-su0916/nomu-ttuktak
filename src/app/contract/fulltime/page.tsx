@@ -27,8 +27,10 @@ interface ContractData {
   mealAllowance: number;
   transportAllowance: number;
   otherAllowance: string;
+  otherAllowanceAmount: number;
   paymentDate: number;
   annualLeave: number;
+  annualLeaveType: 'hireDate' | 'fiscalYear';
   probationPeriod: number;
   probationSalaryRate: number;
   insurance: {
@@ -69,8 +71,10 @@ const defaultContract: ContractData = {
   mealAllowance: 200000,
   transportAllowance: 0,
   otherAllowance: '',
+  otherAllowanceAmount: 0,
   paymentDate: 25,
   annualLeave: 15,
+  annualLeaveType: 'hireDate',
   probationPeriod: 3,
   probationSalaryRate: 100,
   insurance: {
@@ -590,15 +594,28 @@ export default function FulltimeContractPage() {
                   onChange={(e) => updateContract('transportAllowance', parseInt(e.target.value) || 0)}
                 />
               </div>
-              <div className="md:col-span-2">
-                <label className="input-label">기타 수당</label>
+              <div>
+                <label className="input-label">기타 수당 내역</label>
                 <input
                   type="text"
                   className="input-field"
-                  placeholder="예: 직책수당 월 30만원, 자격수당 월 10만원"
+                  placeholder="예: 직책수당, 자격수당"
                   value={contract.otherAllowance}
                   onChange={(e) => updateContract('otherAllowance', e.target.value)}
                 />
+              </div>
+              <div>
+                <label className="input-label">기타 수당 금액 (월)</label>
+                <input
+                  type="number"
+                  className="input-field"
+                  placeholder="300000"
+                  value={contract.otherAllowanceAmount || ''}
+                  onChange={(e) => updateContract('otherAllowanceAmount', parseInt(e.target.value) || 0)}
+                />
+                {contract.otherAllowanceAmount > 0 && (
+                  <p className="text-xs text-gray-400 mt-1">= {formatCurrency(contract.otherAllowanceAmount)}</p>
+                )}
               </div>
               <div>
                 <label className="input-label">연차휴가 (일)</label>
@@ -609,6 +626,22 @@ export default function FulltimeContractPage() {
                   onChange={(e) => updateContract('annualLeave', parseInt(e.target.value) || 0)}
                 />
                 <p className="text-xs text-gray-400 mt-1">근로기준법 제60조 (1년 근속 시 15일)</p>
+              </div>
+              <div>
+                <label className="input-label">연차휴가 산정기준</label>
+                <select
+                  className="input-field"
+                  value={contract.annualLeaveType}
+                  onChange={(e) => updateContract('annualLeaveType', e.target.value)}
+                >
+                  <option value="hireDate">입사일 기준</option>
+                  <option value="fiscalYear">회계연도 기준</option>
+                </select>
+                <p className="text-xs text-gray-400 mt-1">
+                  {contract.annualLeaveType === 'hireDate'
+                    ? '입사일로부터 1년 단위로 연차 발생'
+                    : '매년 1/1~12/31 기준으로 연차 발생 (비례부여)'}
+                </p>
               </div>
             </div>
           </div>
@@ -682,10 +715,13 @@ function ContractPreview({ contract }: { contract: ContractData }) {
   const totalMinutes = (endHour * 60 + endMin) - (startHour * 60 + startMin) - contract.breakTime;
   const dailyHours = Math.floor(totalMinutes / 60);
   const dailyMins = totalMinutes % 60;
-  const weeklyHours = totalMinutes * contract.workDays.length / 60;
+  const rawWeeklyHours = totalMinutes * contract.workDays.length / 60;
+  // 근로기준법 제50조: 주 소정근로시간은 40시간 상한
+  const weeklyPrescribedHours = Math.min(rawWeeklyHours, 40);
+  const weeklyOvertimeHours = Math.max(rawWeeklyHours - 40, 0);
 
-  // 총 월급 계산
-  const totalMonthlySalary = contract.baseSalary + (contract.mealAllowance || 0) + (contract.transportAllowance || 0);
+  // 총 월급 계산 (기타수당 금액 포함)
+  const totalMonthlySalary = contract.baseSalary + (contract.mealAllowance || 0) + (contract.transportAllowance || 0) + (contract.otherAllowanceAmount || 0);
 
   const cellStyle = { border: '1px solid #d1d5db', padding: '10px 14px', verticalAlign: 'top' as const };
   const headerStyle = { ...cellStyle, backgroundColor: '#f8fafc', fontWeight: 600, width: '140px', color: '#374151' };
@@ -770,9 +806,17 @@ function ContractPreview({ contract }: { contract: ContractData }) {
             <td style={cellStyle}>
               <strong>{contract.workStartTime}</strong> ~ <strong>{contract.workEndTime}</strong><br />
               <span style={{ color: '#6b7280', fontSize: '13px' }}>
-                (1일 소정근로시간: {dailyHours}시간 {dailyMins > 0 ? `${dailyMins}분` : ''}, 
-                주 소정근로시간: {weeklyHours.toFixed(1)}시간)
+                (1일 소정근로시간: {dailyHours}시간 {dailyMins > 0 ? `${dailyMins}분` : ''},
+                주 소정근로시간: {weeklyPrescribedHours}시간)
               </span>
+              {weeklyOvertimeHours > 0 && (
+                <>
+                  <br />
+                  <span style={{ color: '#dc2626', fontSize: '13px', fontWeight: 600 }}>
+                    ※ 주 연장근로시간: {weeklyOvertimeHours}시간 (통상임금의 50% 가산)
+                  </span>
+                </>
+              )}
             </td>
           </tr>
           <tr>
@@ -819,10 +863,21 @@ function ContractPreview({ contract }: { contract: ContractData }) {
           <tr>
             <th style={headerStyle}>연차유급휴가</th>
             <td style={cellStyle}>
-              연간 <strong>{contract.annualLeave}일</strong> (근로기준법 제60조에 따라 발생)<br />
+              연간 <strong>{contract.annualLeave}일</strong> ({contract.annualLeaveType === 'hireDate' ? '입사일 기준' : '회계연도 기준'}으로 발생)<br />
               <span style={{ color: '#6b7280', fontSize: '13px' }}>
-                ※ 1년 미만 근로자: 1개월 개근 시 1일 발생<br />
-                ※ 3년 이상 계속 근로 시 2년마다 1일 추가 (최대 25일)
+                {contract.annualLeaveType === 'hireDate' ? (
+                  <>
+                    ※ 입사일로부터 1년 단위로 연차 산정 (근로기준법 제60조)<br />
+                    ※ 1년 미만 근로자: 1개월 개근 시 1일 발생<br />
+                    ※ 3년 이상 계속 근로 시 2년마다 1일 추가 (최대 25일)
+                  </>
+                ) : (
+                  <>
+                    ※ 매년 1월 1일 ~ 12월 31일 기준으로 연차 산정<br />
+                    ※ 입사 첫해: 근무 개월 수에 비례하여 부여<br />
+                    ※ 3년 이상 계속 근로 시 2년마다 1일 추가 (최대 25일)
+                  </>
+                )}
               </span>
             </td>
           </tr>
@@ -862,10 +917,10 @@ function ContractPreview({ contract }: { contract: ContractData }) {
                       <td style={{ padding: '4px 0', textAlign: 'right' }}>{formatCurrency(contract.transportAllowance)}</td>
                     </tr>
                   )}
-                  {contract.otherAllowance && (
+                  {(contract.otherAllowance || contract.otherAllowanceAmount > 0) && (
                     <tr>
-                      <td style={{ padding: '4px 0' }}>기타수당</td>
-                      <td style={{ padding: '4px 0', textAlign: 'right' }}>{contract.otherAllowance}</td>
+                      <td style={{ padding: '4px 0' }}>기타수당{contract.otherAllowance ? ` (${contract.otherAllowance})` : ''}</td>
+                      <td style={{ padding: '4px 0', textAlign: 'right' }}>{formatCurrency(contract.otherAllowanceAmount)}</td>
                     </tr>
                   )}
                   <tr style={{ borderTop: '1px solid #d1d5db', fontWeight: 600 }}>
