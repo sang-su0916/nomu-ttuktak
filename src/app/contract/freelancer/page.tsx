@@ -15,6 +15,7 @@ interface FreelancerContractData {
   projectDescription: string;
   deliverables: string;
   totalFee: number;
+  includesVat: boolean;
   paymentSchedule: {
     description: string;
     amount: number;
@@ -40,6 +41,7 @@ const defaultContract: FreelancerContractData = {
   projectDescription: '',
   deliverables: '',
   totalFee: 0,
+  includesVat: false,
   paymentSchedule: [
     { description: '계약금', amount: 0, dueDate: '' },
     { description: '잔금', amount: 0, dueDate: '' },
@@ -95,9 +97,15 @@ export default function FreelancerContractPage() {
     }));
   };
 
-  // 원천징수 금액 계산
-  const withholdingAmount = Math.round(contract.totalFee * (contract.taxWithholding / 100));
+  // 원천징수 금액 계산 (부가세 분리)
+  const supplyPrice = contract.includesVat ? Math.round(contract.totalFee / 1.1) : contract.totalFee;
+  const vatAmount = contract.includesVat ? contract.totalFee - supplyPrice : 0;
+  const withholdingAmount = Math.round(supplyPrice * (contract.taxWithholding / 100));
   const netAmount = contract.totalFee - withholdingAmount;
+
+  // 분할지급 합계 검증
+  const paymentTotal = contract.paymentSchedule.reduce((sum, s) => sum + s.amount, 0);
+  const paymentMismatch = contract.totalFee > 0 && paymentTotal > 0 && paymentTotal !== contract.totalFee;
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
@@ -283,8 +291,18 @@ export default function FreelancerContractPage() {
                 >
                   <option value={3.3}>3.3% (사업소득)</option>
                   <option value={8.8}>8.8% (기타소득)</option>
-                  <option value={0}>0% (원천징수 없음)</option>
                 </select>
+              </div>
+              <div className="flex items-center md:col-span-2">
+                <label className="flex items-center gap-2 cursor-pointer mt-2">
+                  <input
+                    type="checkbox"
+                    checked={contract.includesVat}
+                    onChange={(e) => updateContract('includesVat', e.target.checked)}
+                    className="w-5 h-5 text-emerald-600 rounded"
+                  />
+                  <span className="text-gray-700">총 계약금액에 부가세(VAT 10%) 포함</span>
+                </label>
               </div>
             </div>
 
@@ -337,12 +355,27 @@ export default function FreelancerContractPage() {
               </div>
             </div>
 
+            {/* 분할지급 합계 검증 */}
+            {paymentMismatch && (
+              <div className="mt-4 p-3 bg-red-50 rounded-lg border border-red-200">
+                <p className="text-sm text-red-700 font-medium">
+                  ⚠️ 분할지급 합계({formatCurrency(paymentTotal)})가 총 계약금액({formatCurrency(contract.totalFee)})과 일치하지 않습니다.
+                </p>
+              </div>
+            )}
+
             {/* 정산 금액 */}
             <div className="mt-4 p-4 bg-emerald-50 rounded-lg">
               <h4 className="font-medium text-emerald-800 mb-2">📊 정산 예상</h4>
               <div className="text-sm text-emerald-700 space-y-1">
                 <p>총 계약금액: {formatCurrency(contract.totalFee)}</p>
-                <p>원천징수액 ({contract.taxWithholding}%): -{formatCurrency(withholdingAmount)}</p>
+                {contract.includesVat && (
+                  <>
+                    <p>공급가액: {formatCurrency(supplyPrice)}</p>
+                    <p>부가세(VAT): {formatCurrency(vatAmount)}</p>
+                  </>
+                )}
+                <p>원천징수액 ({contract.taxWithholding}% of {contract.includesVat ? '공급가액' : '계약금액'}): -{formatCurrency(withholdingAmount)}</p>
                 <p className="font-bold text-lg pt-2 border-t border-emerald-200">
                   실수령액: {formatCurrency(netAmount)}
                 </p>
@@ -366,7 +399,9 @@ export default function FreelancerContractPage() {
 }
 
 function FreelancerContractPreview({ contract }: { contract: FreelancerContractData }) {
-  const withholdingAmount = Math.round(contract.totalFee * (contract.taxWithholding / 100));
+  const supplyPrice = contract.includesVat ? Math.round(contract.totalFee / 1.1) : contract.totalFee;
+  const vatAmount = contract.includesVat ? contract.totalFee - supplyPrice : 0;
+  const withholdingAmount = Math.round(supplyPrice * (contract.taxWithholding / 100));
 
   return (
     <div className="contract-document p-8" style={{ fontFamily: "'Nanum Gothic', sans-serif" }}>
@@ -427,10 +462,16 @@ function FreelancerContractPreview({ contract }: { contract: FreelancerContractD
         제3조 (계약금액 및 지급)
       </h2>
       <p style={{ lineHeight: '1.8', marginBottom: '8px' }}>
-        ① 총 계약금액: 금 {formatCurrency(contract.totalFee)} (부가세 별도)
+        ① 총 계약금액: 금 {formatCurrency(contract.totalFee)} ({contract.includesVat ? '부가세 포함' : '부가세 별도'})
       </p>
+      {contract.includesVat && (
+        <p style={{ lineHeight: '1.8', marginBottom: '8px', color: '#6b7280', fontSize: '13px', paddingLeft: '16px' }}>
+          (공급가액: {formatCurrency(supplyPrice)}, 부가세: {formatCurrency(vatAmount)})
+        </p>
+      )}
       <p style={{ lineHeight: '1.8', marginBottom: '8px' }}>
         ② 원천징수: {contract.taxWithholding}% ({formatCurrency(withholdingAmount)})
+        {contract.includesVat && <span style={{ fontSize: '13px', color: '#6b7280' }}> (공급가액 기준)</span>}
       </p>
       <p style={{ lineHeight: '1.8', marginBottom: '8px' }}>
         ③ 지급일정:

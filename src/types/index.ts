@@ -72,7 +72,8 @@ export interface Employee {
   // 비과세 옵션
   taxExemptOptions: {
     hasOwnCar: boolean;          // 본인 차량 보유
-    hasChildUnder6: boolean;     // 6세 이하 자녀
+    hasChildUnder6: boolean;     // 6세 이하 자녀 유무
+    childrenUnder6Count?: number; // 6세 이하 자녀 수 (2026년 개정: 1인당 월 20만원 비과세)
     isResearcher: boolean;       // 연구원 여부
   };
   

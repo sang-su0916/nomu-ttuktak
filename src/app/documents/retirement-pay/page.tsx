@@ -102,7 +102,8 @@ export default function RetirementPayPage() {
   const totalDays3m = data.lastThreeMonths.reduce((s, m) => s + m.days, 0);
   const avgDailyWage = totalDays3m > 0 ? totalPay3m / totalDays3m : 0;
   const tenureDays = calcTenureDays(data.hireDate, data.resignDate);
-  const retirementPay = avgDailyWage * 30 * (tenureDays / 365);
+  const isEligible = tenureDays >= 365;
+  const retirementPay = isEligible ? avgDailyWage * 30 * (tenureDays / 365) : 0;
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
@@ -115,7 +116,7 @@ export default function RetirementPayPage() {
           <button onClick={() => setShowPreview(!showPreview)} className="btn btn-secondary">
             {showPreview ? '수정' : '미리보기'}
           </button>
-          <button onClick={() => handlePrint()} className="btn btn-primary" disabled={!data.employeeName}>
+          <button onClick={() => handlePrint()} className="btn btn-primary" disabled={!data.employeeName || !isEligible}>
             인쇄/PDF
           </button>
         </div>
@@ -171,7 +172,11 @@ export default function RetirementPayPage() {
             {tenureDays > 0 && (
               <div className="mt-4 p-3 bg-gray-50 rounded-lg">
                 <p className="text-sm">총 재직일수: <strong>{tenureDays}일</strong> ({Math.floor(tenureDays / 365)}년 {tenureDays % 365}일)</p>
-                {tenureDays < 365 && <p className="text-sm text-red-500 mt-1">1년 미만 근속 시 퇴직금 지급 의무가 없습니다.</p>}
+                {tenureDays > 0 && tenureDays < 365 && (
+                <p className="text-sm text-red-500 mt-1 font-medium">
+                  ⚠️ 1년 미만 근속 (퇴직급여보장법 제4조: 1년 이상 근속해야 퇴직금 수급권 발생). 인쇄가 차단됩니다.
+                </p>
+              )}
               </div>
             )}
           </div>

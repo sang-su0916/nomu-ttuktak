@@ -35,10 +35,25 @@ function calcWorkHours(start: string, end: string): { work: number; overtime: nu
   const workMin = Math.max(0, totalMin - breakMin);
   const workH = workMin / 60;
   const overtime = Math.max(0, workH - 8);
-  // 야간근로: 22:00~06:00
+  // 야간근로: 22:00~06:00 (분 단위로 정확히 계산)
   let nightMin = 0;
-  if (eh >= 22 || eh < 6) nightMin = Math.max(0, totalMin - Math.max(0, (22 * 60 - sh * 60 - sm)));
-  if (eh < 6) nightMin = totalMin;
+  const startMin = sh * 60 + sm;
+  const endOnTimeline = startMin + totalMin;
+  if (endOnTimeline <= 1440) {
+    // 자정 미경과: [0,360) 및 [1320,1440) 구간과 겹치는 부분
+    if (startMin < 360) {
+      nightMin += Math.min(endOnTimeline, 360) - startMin;
+    }
+    if (endOnTimeline > 1320) {
+      nightMin += Math.min(endOnTimeline, 1440) - Math.max(startMin, 1320);
+    }
+  } else {
+    // 자정 경과: 자정 전 [1320,1440)과 자정 후 [0,360) 구간
+    nightMin += 1440 - Math.max(startMin, 1320);
+    const postMidnightEnd = endOnTimeline - 1440;
+    nightMin += Math.min(postMidnightEnd, 360);
+  }
+  nightMin = Math.max(0, nightMin);
   return { work: Math.round(workH * 10) / 10, overtime: Math.round(overtime * 10) / 10, night: Math.round(nightMin / 60 * 10) / 10 };
 }
 

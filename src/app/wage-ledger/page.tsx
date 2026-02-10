@@ -4,7 +4,7 @@ import { useState, useRef } from 'react';
 import { useReactToPrint } from 'react-to-print';
 import { CompanyInfo, Employee as RegisteredEmployee } from '@/types';
 import { loadCompanyInfo, defaultCompanyInfo, formatCurrency, formatBusinessNumber, getActiveEmployees } from '@/lib/storage';
-import { calculateInsurance } from '@/lib/constants';
+import { calculateInsurance, calculateIncomeTax } from '@/lib/constants';
 
 interface LedgerEmployee {
   id: string;
@@ -84,6 +84,7 @@ export default function WageLedgerPage() {
   const addAllRegisteredEmployees = () => {
     const newEmployees = registeredEmployees.map(emp => {
       const insurance = calculateInsurance(emp.salary.baseSalary);
+      const incomeTax = calculateIncomeTax(emp.salary.baseSalary);
       return {
         id: `${Date.now()}-${emp.id}`,
         registeredId: emp.id,
@@ -96,13 +97,13 @@ export default function WageLedgerPage() {
         bonus: 0,
         mealAllowance: emp.salary.mealAllowance,
         carAllowance: emp.salary.carAllowance,
-        otherAllowance: emp.salary.childcareAllowance,
+        otherAllowance: emp.salary.childcareAllowance + (emp.salary.otherAllowances?.reduce((sum: number, a: { amount: number }) => sum + a.amount, 0) || 0),
         nationalPension: insurance.nationalPension,
         healthInsurance: insurance.healthInsurance,
         longTermCare: insurance.longTermCare,
         employmentInsurance: insurance.employmentInsurance,
-        incomeTax: 0,
-        localTax: 0,
+        incomeTax,
+        localTax: Math.round(incomeTax * 0.1),
       };
     });
     setData(prev => ({ ...prev, employees: newEmployees }));
@@ -134,7 +135,7 @@ export default function WageLedgerPage() {
     }));
   };
 
-  // 4대보험 자동 계산
+  // 4대보험 + 소득세 자동 계산
   const autoCalculateDeductions = (id: string) => {
     setData(prev => ({
       ...prev,
@@ -142,12 +143,15 @@ export default function WageLedgerPage() {
         if (e.id !== id) return e;
         const taxable = e.baseSalary + e.overtime + e.nightWork + e.holidayWork + e.bonus;
         const insurance = calculateInsurance(taxable);
+        const incomeTax = calculateIncomeTax(taxable);
         return {
           ...e,
           nationalPension: insurance.nationalPension,
           healthInsurance: insurance.healthInsurance,
           longTermCare: insurance.longTermCare,
           employmentInsurance: insurance.employmentInsurance,
+          incomeTax,
+          localTax: Math.round(incomeTax * 0.1),
         };
       })
     }));
@@ -160,12 +164,15 @@ export default function WageLedgerPage() {
       employees: prev.employees.map(e => {
         const taxable = e.baseSalary + e.overtime + e.nightWork + e.holidayWork + e.bonus;
         const insurance = calculateInsurance(taxable);
+        const incomeTax = calculateIncomeTax(taxable);
         return {
           ...e,
           nationalPension: insurance.nationalPension,
           healthInsurance: insurance.healthInsurance,
           longTermCare: insurance.longTermCare,
           employmentInsurance: insurance.employmentInsurance,
+          incomeTax,
+          localTax: Math.round(incomeTax * 0.1),
         };
       })
     }));
@@ -281,7 +288,7 @@ export default function WageLedgerPage() {
               <h2 className="form-section-title mb-0">👥 직원별 급여 내역</h2>
               <div className="flex gap-2">
                 <button onClick={autoCalculateAll} className="btn-secondary text-sm">
-                  🔄 4대보험 일괄 계산
+                  🔄 4대보험/세금 일괄 계산
                 </button>
                 <button onClick={addEmployee} className="btn-secondary text-sm">
                   ➕ 직원 추가

@@ -177,7 +177,8 @@ export default function PayslipPage() {
     if (!autoCalculate) return payslip.deductions;
 
     // 과세소득 계산 (비과세 항목 제외)
-    let taxableIncome = payslip.earnings.baseSalary + payslip.earnings.overtime + payslip.earnings.bonus;
+    let taxableIncome = payslip.earnings.baseSalary + payslip.earnings.overtime + payslip.earnings.bonus +
+      (payslip.earnings.nightWork || 0) + (payslip.earnings.holidayWork || 0);
 
     // 기타수당은 과세
     taxableIncome += payslip.earnings.otherAllowance;

@@ -4,6 +4,7 @@ import { useState, useRef } from 'react';
 import { useReactToPrint } from 'react-to-print';
 import { CompanyInfo, EmployeeInfo, Employee } from '@/types';
 import { loadCompanyInfo, defaultCompanyInfo, formatDate, formatCurrency, formatBusinessNumber, formatResidentNumber, getActiveEmployees } from '@/lib/storage';
+import { MINIMUM_WAGE } from '@/lib/constants';
 
 interface ContractData {
   company: CompanyInfo;
@@ -410,6 +411,15 @@ export default function FulltimeContractPage() {
                   <option value={80}>80%</option>
                 </select>
                 <p className="text-xs text-gray-400 mt-1">* 최저임금 미만 불가</p>
+                {contract.probationSalaryRate < 100 && contract.baseSalary > 0 && (() => {
+                  const probationMonthly = Math.round(contract.baseSalary * contract.probationSalaryRate / 100);
+                  const minProbationMonthly = Math.round(MINIMUM_WAGE.monthly * 0.9);
+                  return probationMonthly < minProbationMonthly ? (
+                    <p className="text-red-500 text-xs mt-1 font-medium">
+                      ⚠️ 수습 월급 {formatCurrency(probationMonthly)}이 최저임금 90%({formatCurrency(minProbationMonthly)})에 미달합니다.
+                    </p>
+                  ) : null;
+                })()}
               </div>
             </div>
           </div>
@@ -525,7 +535,14 @@ export default function FulltimeContractPage() {
                   className="input-field"
                   placeholder="3000000"
                   value={contract.baseSalary || ''}
-                  onChange={(e) => updateContract('baseSalary', parseInt(e.target.value) || 0)}
+                  onChange={(e) => {
+                    const monthly = parseInt(e.target.value) || 0;
+                    setContract(prev => ({
+                      ...prev,
+                      baseSalary: monthly,
+                      annualSalary: monthly * 12,
+                    }));
+                  }}
                 />
                 <p className="text-xs text-gray-400 mt-1">
                   {contract.baseSalary > 0 && `= ${formatCurrency(contract.baseSalary)} (세전)`}
@@ -710,6 +727,10 @@ function ContractPreview({ contract }: { contract: ContractData }) {
   // 근로기준법 제50조: 주 소정근로시간은 40시간 상한
   const weeklyPrescribedHours = Math.min(rawWeeklyHours, 40);
   const weeklyOvertimeHours = Math.max(rawWeeklyHours - 40, 0);
+
+  // 월 소정근로시간 동적 계산: (주 소정근로시간 + 유급주휴시간) × (365/12/7)
+  const dailyPrescribedHours = contract.workDays.length > 0 ? weeklyPrescribedHours / contract.workDays.length : 8;
+  const monthlyPrescribedHours = Math.round((weeklyPrescribedHours + dailyPrescribedHours) * 365 / 12 / 7);
 
   // 총 월급 계산 (기타수당 금액 포함)
   const totalMonthlySalary = contract.baseSalary + (contract.mealAllowance || 0) + (contract.transportAllowance || 0) + (contract.otherAllowanceAmount || 0);
@@ -947,7 +968,7 @@ function ContractPreview({ contract }: { contract: ContractData }) {
             <th style={headerStyle}>임금계산</th>
             <td style={cellStyle}>
               <span style={{ color: '#6b7280', fontSize: '13px' }}>
-                • 통상시급 = 월 기본급 ÷ 209시간 (월 소정근로시간)<br />
+                • 통상시급 = 월 기본급 ÷ {monthlyPrescribedHours}시간 (월 소정근로시간){contract.baseSalary > 0 && <><br />  → {formatCurrency(Math.round(contract.baseSalary / monthlyPrescribedHours))}/시간</>}<br />
                 • 초과근로 시 통상임금의 50% 가산 (근로기준법 제56조)
               </span>
             </td>

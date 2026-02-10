@@ -19,7 +19,12 @@ export const saveCompanyInfo = (info: CompanyInfo): void => {
 export const loadCompanyInfo = (): CompanyInfo | null => {
   if (typeof window !== 'undefined') {
     const saved = localStorage.getItem(STORAGE_KEYS.COMPANY_INFO);
-    return saved ? JSON.parse(saved) : null;
+    if (!saved) return null;
+    try {
+      return JSON.parse(saved);
+    } catch {
+      return null;
+    }
   }
   return null;
 };
@@ -44,7 +49,12 @@ export const saveEmployees = (employees: Employee[]): void => {
 export const loadEmployees = (): Employee[] => {
   if (typeof window !== 'undefined') {
     const saved = localStorage.getItem(STORAGE_KEYS.EMPLOYEES);
-    return saved ? JSON.parse(saved) : [];
+    if (!saved) return [];
+    try {
+      return JSON.parse(saved);
+    } catch {
+      return [];
+    }
   }
   return [];
 };
@@ -91,7 +101,12 @@ export const savePaymentRecords = (records: PaymentRecord[]): void => {
 export const loadPaymentRecords = (): PaymentRecord[] => {
   if (typeof window !== 'undefined') {
     const saved = localStorage.getItem(STORAGE_KEYS.PAYMENT_RECORDS);
-    return saved ? JSON.parse(saved) : [];
+    if (!saved) return [];
+    try {
+      return JSON.parse(saved);
+    } catch {
+      return [];
+    }
   }
   return [];
 };
@@ -125,7 +140,7 @@ export const updatePaymentRecord = (id: string, updates: Partial<PaymentRecord>)
 // ID 생성
 // ============================================
 export const generateId = (): string => {
-  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  return `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 };
 
 // ============================================
@@ -141,14 +156,16 @@ export const formatCurrency = (amount: number): string => {
 
 export const formatDate = (dateStr: string): string => {
   if (!dateStr) return '';
-  const date = new Date(dateStr);
-  return `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일`;
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  return `${Number(parts[0])}년 ${Number(parts[1])}월 ${Number(parts[2])}일`;
 };
 
 export const formatDateShort = (dateStr: string): string => {
   if (!dateStr) return '';
-  const date = new Date(dateStr);
-  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  return `${parts[0]}.${parts[1].padStart(2, '0')}.${parts[2].padStart(2, '0')}`;
 };
 
 export const formatResidentNumber = (num: string, mask = true): string => {

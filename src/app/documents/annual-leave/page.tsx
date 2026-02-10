@@ -24,11 +24,23 @@ interface AnnualLeaveData {
 
 function calcAnnualLeave(hireDate: string, year: number): number {
   if (!hireDate) return 15;
-  const hire = new Date(hireDate);
-  const yearDiff = year - hire.getFullYear();
-  if (yearDiff < 1) return 0; // 입사 첫해
-  if (yearDiff === 1) return 15; // 1년 근속
-  const extra = Math.floor((yearDiff - 1) / 2);
+  const hire = new Date(hireDate + 'T00:00:00');
+  const yearEnd = new Date(year, 11, 31);
+
+  // 근속 개월 수 계산 (대상 연도 말 기준)
+  const totalMonths = (yearEnd.getFullYear() - hire.getFullYear()) * 12 + (yearEnd.getMonth() - hire.getMonth());
+
+  // 입사 1년 미만: 1개월 개근 시 1일 (근로기준법 제60조 제2항, 최대 11일)
+  if (totalMonths < 12) {
+    const workedMonths = Math.max(0, Math.floor(
+      ((yearEnd.getTime() - hire.getTime()) / (1000 * 60 * 60 * 24)) / 30
+    ));
+    return Math.min(11, workedMonths);
+  }
+
+  // 1년 이상 근속: 15일 기본 + 2년마다 1일 추가 (최대 25일)
+  const fullYears = Math.floor(totalMonths / 12);
+  const extra = Math.max(0, Math.floor((fullYears - 1) / 2));
   return Math.min(25, 15 + extra);
 }
 

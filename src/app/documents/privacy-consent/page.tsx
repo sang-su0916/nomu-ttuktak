@@ -80,13 +80,13 @@ export default function PrivacyConsentPage() {
         <div className="flex gap-2">
           <button
             onClick={() => setShowPreview(!showPreview)}
-            className="btn-secondary"
+            className="btn btn-secondary"
           >
             {showPreview ? '수정' : '미리보기'}
           </button>
           <button
             onClick={() => handlePrint()}
-            className="btn-primary"
+            className="btn btn-primary"
             disabled={!consent.employee.name}
           >
             인쇄/PDF

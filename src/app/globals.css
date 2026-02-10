@@ -79,6 +79,8 @@ body {
   .no-print { display: none !important; }
   .print-only { display: block !important; }
   body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .contract-document table { page-break-inside: avoid; }
+  .contract-document > div { page-break-inside: avoid; }
 }
 
 .print-only { display: none; }

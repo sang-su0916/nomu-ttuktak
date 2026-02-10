@@ -4,6 +4,7 @@ import { useState, useRef } from 'react';
 import { useReactToPrint } from 'react-to-print';
 import { CompanyInfo, EmployeeInfo, Employee } from '@/types';
 import { loadCompanyInfo, defaultCompanyInfo, formatDate, formatCurrency, formatBusinessNumber, formatResidentNumber, getActiveEmployees } from '@/lib/storage';
+import { MINIMUM_WAGE } from '@/lib/constants';
 
 interface WorkSchedule {
   day: string;
@@ -152,11 +153,25 @@ export default function ParttimeContractPage() {
     }
   };
 
+  // 주 15시간 기준 국민연금/건강보험 자동 토글
+  const autoAdjustInsurance = (c: ParttimeContractData): ParttimeContractData => {
+    const hours = c.weeklyHours;
+    return {
+      ...c,
+      insurance: {
+        ...c.insurance,
+        national: hours >= 15,
+        health: hours >= 15,
+      },
+    };
+  };
+
   const updateContract = (field: string, value: unknown) => {
     setContract(prev => {
       const next = { ...prev, [field]: value };
       if (['scheduleType', 'fixedSchedule', 'flexibleSchedule'].includes(field)) {
         next.weeklyHours = calcWeeklyHours(next);
+        return autoAdjustInsurance(next);
       }
       return next;
     });
@@ -173,7 +188,7 @@ export default function ParttimeContractPage() {
     setContract(prev => {
       const next = { ...prev, fixedSchedule: { ...prev.fixedSchedule, [field]: value } };
       next.weeklyHours = calcWeeklyHours(next);
-      return next;
+      return autoAdjustInsurance(next);
     });
   };
 
@@ -189,7 +204,7 @@ export default function ParttimeContractPage() {
         }
       };
       next.weeklyHours = calcWeeklyHours(next);
-      return next;
+      return autoAdjustInsurance(next);
     });
   };
 
@@ -208,7 +223,7 @@ export default function ParttimeContractPage() {
 
       const next = { ...prev, flexibleSchedule: newSchedule };
       next.weeklyHours = calcWeeklyHours(next);
-      return next;
+      return autoAdjustInsurance(next);
     });
   };
 
@@ -236,7 +251,7 @@ export default function ParttimeContractPage() {
           <button
             onClick={() => handlePrint()}
             className="btn-primary bg-purple-600 hover:bg-purple-700"
-            disabled={!contract.employee.name}
+            disabled={!contract.employee.name || (contract.hourlyWage > 0 && contract.hourlyWage < MINIMUM_WAGE.hourly)}
           >
             🖨️ 인쇄/PDF
           </button>
@@ -584,9 +599,9 @@ export default function ParttimeContractPage() {
                   onChange={(e) => updateContract('hourlyWage', parseInt(e.target.value) || 0)}
                 />
                 <p className="text-xs text-purple-600 mt-1 font-medium">
-                  2026년 최저시급: 10,320원 
-                  {contract.hourlyWage < 10320 && contract.hourlyWage > 0 && (
-                    <span className="text-red-500 ml-2">⚠️ 최저임금 미달!</span>
+                  {MINIMUM_WAGE.year}년 최저시급: {MINIMUM_WAGE.hourly.toLocaleString()}원
+                  {contract.hourlyWage < MINIMUM_WAGE.hourly && contract.hourlyWage > 0 && (
+                    <span className="text-red-500 ml-2">⚠️ 최저임금 미달! 인쇄가 차단됩니다.</span>
                   )}
                 </p>
               </div>

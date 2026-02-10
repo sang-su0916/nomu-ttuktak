@@ -174,14 +174,26 @@ export default function AnnualLeaveNoticePage() {
               <div>
                 <label className="input-label">통보일</label>
                 <input type="date" className="input-field" value={data.noticeDate}
-                  onChange={e => setData(prev => ({ ...prev, noticeDate: e.target.value }))} />
+                  onChange={e => {
+                    const noticeDate = e.target.value;
+                    setData(prev => {
+                      const next = { ...prev, noticeDate };
+                      // 1차 촉진: 통보일 + 10일 자동계산
+                      if (prev.noticeType === '1st' && noticeDate) {
+                        const d = new Date(noticeDate);
+                        d.setDate(d.getDate() + 10);
+                        next.deadline = d.toISOString().split('T')[0];
+                      }
+                      return next;
+                    });
+                  }} />
               </div>
               <div>
                 <label className="input-label">사용 시기 지정 기한</label>
                 <input type="date" className="input-field" value={data.deadline}
                   onChange={e => setData(prev => ({ ...prev, deadline: e.target.value }))} />
                 <p className="text-xs text-gray-400 mt-1">
-                  {data.noticeType === '1st' ? '통보일로부터 10일 이내' : '연차 만료 전까지'}
+                  {data.noticeType === '1st' ? '통보일로부터 10일 이내 (자동계산됨)' : '연차 만료 전까지'}
                 </p>
               </div>
             </div>
