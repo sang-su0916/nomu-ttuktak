@@ -1,19 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { CompanyInfo } from '@/types';
 import { saveCompanyInfo, loadCompanyInfo, defaultCompanyInfo, formatBusinessNumber, formatPhoneNumber } from '@/lib/storage';
 
 export default function SettingsPage() {
-  const [company, setCompany] = useState<CompanyInfo>(defaultCompanyInfo);
+  const [company, setCompany] = useState<CompanyInfo>(() => {
+    if (typeof window === 'undefined') return defaultCompanyInfo;
+    return loadCompanyInfo() || defaultCompanyInfo;
+  });
   const [saved, setSaved] = useState(false);
-
-  useEffect(() => {
-    const savedInfo = loadCompanyInfo();
-    if (savedInfo) {
-      setCompany(savedInfo);
-    }
-  }, []);
 
   const handleChange = (field: keyof CompanyInfo, value: string) => {
     setCompany(prev => ({ ...prev, [field]: value }));

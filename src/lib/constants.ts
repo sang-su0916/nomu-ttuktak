@@ -301,7 +301,6 @@ export function calculateIncomeTax(monthlyTaxable: number, dependents: number = 
   let tax = 0;
   for (const bracket of INCOME_TAX_BRACKETS) {
     if (taxableAfterDeduction > bracket.min) {
-      const taxableInBracket = Math.min(taxableAfterDeduction, bracket.max) - bracket.min;
       tax = taxableAfterDeduction * bracket.rate - bracket.deduction;
       if (taxableAfterDeduction <= bracket.max) break;
     }

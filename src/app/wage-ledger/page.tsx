@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useReactToPrint } from 'react-to-print';
 import { CompanyInfo, Employee as RegisteredEmployee } from '@/types';
 import { loadCompanyInfo, defaultCompanyInfo, formatCurrency, formatBusinessNumber, getActiveEmployees } from '@/lib/storage';
-import { calculateInsurance, INSURANCE_RATES } from '@/lib/constants';
+import { calculateInsurance } from '@/lib/constants';
 
 interface LedgerEmployee {
   id: string;
@@ -57,25 +57,23 @@ const createEmptyEmployee = (): LedgerEmployee => ({
 const today = new Date();
 
 export default function WageLedgerPage() {
-  const [data, setData] = useState<WageLedgerData>({
-    company: defaultCompanyInfo,
-    year: today.getFullYear(),
-    month: today.getMonth() + 1,
-    employees: [],
+  const [data, setData] = useState<WageLedgerData>(() => {
+    const base: WageLedgerData = {
+      company: defaultCompanyInfo,
+      year: today.getFullYear(),
+      month: today.getMonth() + 1,
+      employees: [],
+    };
+    if (typeof window === 'undefined') return base;
+    const saved = loadCompanyInfo();
+    return saved ? { ...base, company: saved } : base;
   });
-  const [registeredEmployees, setRegisteredEmployees] = useState<RegisteredEmployee[]>([]);
+  // 등록된 직원 불러오기
+  const [registeredEmployees] = useState<RegisteredEmployee[]>(() =>
+    typeof window !== 'undefined' ? getActiveEmployees() : []
+  );
   const [showPreview, setShowPreview] = useState(false);
-  const [autoCalc, setAutoCalc] = useState(true);
   const printRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const savedCompany = loadCompanyInfo();
-    if (savedCompany) {
-      setData(prev => ({ ...prev, company: savedCompany }));
-    }
-    // 등록된 직원 불러오기
-    setRegisteredEmployees(getActiveEmployees());
-  }, []);
 
   const handlePrint = useReactToPrint({
     contentRef: printRef,
@@ -296,7 +294,7 @@ export default function WageLedgerPage() {
                 <p className="text-4xl mb-4">📋</p>
                 <p>직원이 없습니다.</p>
                 <p className="text-sm mt-2">
-                  위의 "등록된 직원 전체 추가" 버튼을 누르거나, "직원 추가" 버튼을 눌러주세요.
+                  위의 {'"'}등록된 직원 전체 추가{'"'} 버튼을 누르거나, {'"'}직원 추가{'"'} 버튼을 눌러주세요.
                 </p>
               </div>
             ) : (

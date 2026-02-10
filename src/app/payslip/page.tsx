@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useReactToPrint } from 'react-to-print';
 import { CompanyInfo, EmployeeInfo, Employee } from '@/types';
 import { loadCompanyInfo, defaultCompanyInfo, formatCurrency, formatBusinessNumber, getActiveEmployees } from '@/lib/storage';
@@ -112,21 +112,19 @@ const defaultPayslip: PayslipData = {
 };
 
 export default function PayslipPage() {
-  const [payslip, setPayslip] = useState<PayslipData>(defaultPayslip);
+  const [payslip, setPayslip] = useState<PayslipData>(() => {
+    if (typeof window === 'undefined') return defaultPayslip;
+    const saved = loadCompanyInfo();
+    return saved ? { ...defaultPayslip, company: saved } : defaultPayslip;
+  });
   const [showPreview, setShowPreview] = useState(false);
   const [autoCalculate, setAutoCalculate] = useState(true);
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [employees] = useState<Employee[]>(() =>
+    typeof window !== 'undefined' ? getActiveEmployees() : []
+  );
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
   const [showAdditionalOptions, setShowAdditionalOptions] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const savedCompany = loadCompanyInfo();
-    if (savedCompany) {
-      setPayslip(prev => ({ ...prev, company: savedCompany }));
-    }
-    setEmployees(getActiveEmployees());
-  }, []);
 
   // 직원 선택 시 정보 자동 입력
   const handleEmployeeSelect = (employeeId: string) => {
@@ -174,19 +172,16 @@ export default function PayslipPage() {
     });
   };
 
-  // 4대보험 자동 계산
-  useEffect(() => {
-    if (!autoCalculate) return;
-    
+  // 4대보험 자동 계산 (render-time)
+  const deductions = (() => {
+    if (!autoCalculate) return payslip.deductions;
+
     // 과세소득 계산 (비과세 항목 제외)
-    const nonTaxableKeys = ADDITIONAL_EARNINGS.filter(e => !e.taxable).map(e => e.key);
-    const baseNonTaxable = ['mealAllowance', 'transportAllowance']; // 식대, 자가운전보조금
-    
     let taxableIncome = payslip.earnings.baseSalary + payslip.earnings.overtime + payslip.earnings.bonus;
-    
+
     // 기타수당은 과세
     taxableIncome += payslip.earnings.otherAllowance;
-    
+
     // 추가 항목 중 과세 항목만 합산
     payslip.enabledAdditionalEarnings.forEach(key => {
       const item = ADDITIONAL_EARNINGS.find(e => e.key === key);
@@ -194,24 +189,19 @@ export default function PayslipPage() {
         taxableIncome += payslip.earnings[key] || 0;
       }
     });
-    
+
     // 2026년 4대보험료율 적용
-    // 국민연금: 9.5% (근로자 4.75%), 건강보험: 7.19% (근로자 3.595%)
-    // 장기요양: 건강보험료의 12.95%, 고용보험: 1.8% (근로자 0.9%)
-    const nationalPensionBase = Math.min(Math.max(taxableIncome, 400000), 6370000); // 상한 637만, 하한 40만
-    
-    setPayslip(prev => ({
-      ...prev,
-      deductions: {
-        nationalPension: Math.round(nationalPensionBase * 0.0475),  // 4.75%
-        healthInsurance: Math.round(taxableIncome * 0.03595),       // 3.595%
-        longTermCare: Math.round(taxableIncome * 0.03595 * 0.1295), // 건강보험료의 12.95%
-        employmentInsurance: Math.round(taxableIncome * 0.009),     // 0.9%
-        incomeTax: calculateIncomeTax(taxableIncome),
-        localTax: Math.round(calculateIncomeTax(taxableIncome) * 0.1),
-      }
-    }));
-  }, [autoCalculate, payslip.earnings, payslip.enabledAdditionalEarnings]);
+    const nationalPensionBase = Math.min(Math.max(taxableIncome, 400000), 6370000);
+
+    return {
+      nationalPension: Math.round(nationalPensionBase * 0.0475),
+      healthInsurance: Math.round(taxableIncome * 0.03595),
+      longTermCare: Math.round(taxableIncome * 0.03595 * 0.1295),
+      employmentInsurance: Math.round(taxableIncome * 0.009),
+      incomeTax: calculateIncomeTax(taxableIncome),
+      localTax: Math.round(calculateIncomeTax(taxableIncome) * 0.1),
+    };
+  })();
 
   const handlePrint = useReactToPrint({
     contentRef: printRef,
@@ -251,7 +241,7 @@ export default function PayslipPage() {
     payslip.earnings.otherAllowance +
     payslip.enabledAdditionalEarnings.reduce((sum, key) => sum + (payslip.earnings[key] || 0), 0);
 
-  const totalDeductions = Object.values(payslip.deductions).reduce((sum, val) => sum + val, 0);
+  const totalDeductions = Object.values(deductions).reduce((sum, val) => sum + val, 0);
   const netPay = totalEarnings - totalDeductions;
 
   return (
@@ -648,7 +638,7 @@ export default function PayslipPage() {
             )}
 
             {payslip.enabledAdditionalEarnings.length === 0 && !showAdditionalOptions && (
-              <p className="text-sm text-zinc-400">선택된 추가 항목이 없습니다. "항목 선택"을 클릭해 추가하세요.</p>
+              <p className="text-sm text-zinc-400">선택된 추가 항목이 없습니다. {'"'}항목 선택{'"'}을 클릭해 추가하세요.</p>
             )}
 
             <div className="mt-4 p-4 bg-blue-50 rounded-lg">
@@ -679,7 +669,7 @@ export default function PayslipPage() {
                 <input
                   type="number"
                   className="input-field"
-                  value={payslip.deductions.nationalPension || ''}
+                  value={deductions.nationalPension || ''}
                   onChange={(e) => updateDeductions('nationalPension', parseInt(e.target.value) || 0)}
                   disabled={autoCalculate}
                 />
@@ -689,7 +679,7 @@ export default function PayslipPage() {
                 <input
                   type="number"
                   className="input-field"
-                  value={payslip.deductions.healthInsurance || ''}
+                  value={deductions.healthInsurance || ''}
                   onChange={(e) => updateDeductions('healthInsurance', parseInt(e.target.value) || 0)}
                   disabled={autoCalculate}
                 />
@@ -699,7 +689,7 @@ export default function PayslipPage() {
                 <input
                   type="number"
                   className="input-field"
-                  value={payslip.deductions.longTermCare || ''}
+                  value={deductions.longTermCare || ''}
                   onChange={(e) => updateDeductions('longTermCare', parseInt(e.target.value) || 0)}
                   disabled={autoCalculate}
                 />
@@ -709,7 +699,7 @@ export default function PayslipPage() {
                 <input
                   type="number"
                   className="input-field"
-                  value={payslip.deductions.employmentInsurance || ''}
+                  value={deductions.employmentInsurance || ''}
                   onChange={(e) => updateDeductions('employmentInsurance', parseInt(e.target.value) || 0)}
                   disabled={autoCalculate}
                 />
@@ -719,7 +709,7 @@ export default function PayslipPage() {
                 <input
                   type="number"
                   className="input-field"
-                  value={payslip.deductions.incomeTax || ''}
+                  value={deductions.incomeTax || ''}
                   onChange={(e) => updateDeductions('incomeTax', parseInt(e.target.value) || 0)}
                   disabled={autoCalculate}
                 />
@@ -729,7 +719,7 @@ export default function PayslipPage() {
                 <input
                   type="number"
                   className="input-field"
-                  value={payslip.deductions.localTax || ''}
+                  value={deductions.localTax || ''}
                   onChange={(e) => updateDeductions('localTax', parseInt(e.target.value) || 0)}
                   disabled={autoCalculate}
                 />
@@ -750,13 +740,13 @@ export default function PayslipPage() {
         </div>
       ) : (
         <div className="bg-white rounded-xl shadow-lg p-8">
-          <PayslipPreview payslip={payslip} />
+          <PayslipPreview payslip={{ ...payslip, deductions }} />
         </div>
       )}
 
       <div className="hidden">
         <div ref={printRef}>
-          <PayslipPreview payslip={payslip} />
+          <PayslipPreview payslip={{ ...payslip, deductions }} />
         </div>
       </div>
     </div>

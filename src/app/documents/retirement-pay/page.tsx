@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useReactToPrint } from 'react-to-print';
 import { CompanyInfo, Employee } from '@/types';
 import { loadCompanyInfo, defaultCompanyInfo, formatDate, formatCurrency, formatResidentNumber, loadEmployees } from '@/lib/storage';
@@ -55,17 +55,18 @@ function calcTenureDays(hire: string, resign: string): number {
 }
 
 export default function RetirementPayPage() {
-  const [data, setData] = useState<RetirementData>(defaultData);
+  const [data, setData] = useState<RetirementData>(() => {
+    if (typeof window === 'undefined') return defaultData;
+    const saved = loadCompanyInfo();
+    return saved ? { ...defaultData, company: saved } : defaultData;
+  });
   const [showPreview, setShowPreview] = useState(false);
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  // 퇴직금은 퇴사자도 포함
+  const [employees] = useState<Employee[]>(() =>
+    typeof window !== 'undefined' ? loadEmployees() : []
+  );
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const printRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const saved = loadCompanyInfo();
-    if (saved) setData(prev => ({ ...prev, company: saved }));
-    setEmployees(loadEmployees());
-  }, []);
 
   const handleEmployeeSelect = (id: string) => {
     setSelectedEmployeeId(id);

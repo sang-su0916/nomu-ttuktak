@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useReactToPrint } from 'react-to-print';
 import { CompanyInfo, EmployeeInfo } from '@/types';
 import { loadCompanyInfo, defaultCompanyInfo, formatDate, formatCurrency, formatBusinessNumber, formatPhoneNumber } from '@/lib/storage';
@@ -48,16 +48,13 @@ const defaultContract: FreelancerContractData = {
 };
 
 export default function FreelancerContractPage() {
-  const [contract, setContract] = useState<FreelancerContractData>(defaultContract);
+  const [contract, setContract] = useState<FreelancerContractData>(() => {
+    if (typeof window === 'undefined') return defaultContract;
+    const saved = loadCompanyInfo();
+    return saved ? { ...defaultContract, company: saved } : defaultContract;
+  });
   const [showPreview, setShowPreview] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const savedCompany = loadCompanyInfo();
-    if (savedCompany) {
-      setContract(prev => ({ ...prev, company: savedCompany }));
-    }
-  }, []);
 
   const handlePrint = useReactToPrint({
     contentRef: printRef,

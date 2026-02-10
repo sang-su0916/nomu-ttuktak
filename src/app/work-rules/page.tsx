@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useReactToPrint } from 'react-to-print';
 import { CompanyInfo } from '@/types';
 import { loadCompanyInfo, defaultCompanyInfo } from '@/lib/storage';
@@ -149,17 +149,14 @@ const defaultWorkRules: WorkRulesData = {
 };
 
 export default function WorkRulesPage() {
-  const [rules, setRules] = useState<WorkRulesData>(defaultWorkRules);
+  const [rules, setRules] = useState<WorkRulesData>(() => {
+    if (typeof window === 'undefined') return defaultWorkRules;
+    const saved = loadCompanyInfo();
+    return saved ? { ...defaultWorkRules, company: saved } : defaultWorkRules;
+  });
   const [showPreview, setShowPreview] = useState(false);
   const [activeSection, setActiveSection] = useState<string>('basic');
   const printRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const savedCompany = loadCompanyInfo();
-    if (savedCompany) {
-      setRules(prev => ({ ...prev, company: savedCompany }));
-    }
-  }, []);
 
   const handlePrint = useReactToPrint({
     contentRef: printRef,
@@ -989,12 +986,12 @@ function WorkRulesPreview({ rules }: { rules: WorkRulesData }) {
       </div>
 
       <div style={css.article}>
-        <p><span style={css.title}>제2조(적용범위)</span> ① 이 취업규칙(이하 "규칙"이라 한다)은 {rules.company.name || '○○주식회사'}(이하 "회사"라 한다)에 근무하는 사원에게 적용한다.</p>
+        <p><span style={css.title}>제2조(적용범위)</span> ① 이 취업규칙(이하 {'"'}규칙{'"'}이라 한다)은 {rules.company.name || '○○주식회사'}(이하 {'"'}회사{'"'}라 한다)에 근무하는 사원에게 적용한다.</p>
         <p>② 사원의 복무 및 근로조건에 관하여 법령, 단체협약 또는 이 규칙 이외의 다른 회사 규정에 별도로 정한 경우를 제외하고는 이 규칙이 정하는 바에 따른다.</p>
       </div>
 
       <div style={css.article}>
-        <p><span style={css.title}>제3조(사원의 정의)</span> 이 규칙에서 "사원"이라 함은 회사와 근로계약을 체결한 무기계약사원과 기간제사원을 말하며, 단시간사원은 제외한다.</p>
+        <p><span style={css.title}>제3조(사원의 정의)</span> 이 규칙에서 {'"'}사원{'"'}이라 함은 회사와 근로계약을 체결한 무기계약사원과 기간제사원을 말하며, 단시간사원은 제외한다.</p>
       </div>
 
       <div style={css.article}>
@@ -1034,7 +1031,7 @@ function WorkRulesPreview({ rules }: { rules: WorkRulesData }) {
       <div style={css.article}>
         <p><span style={css.title}>제8조(복무의무)</span> 사원은 다음 각 호의 사항을 준수하여야 한다.</p>
         <p style={css.indent}>1. 사원은 맡은바 직무를 충실히 수행하여야 한다.</p>
-        <p style={css.indent}>2. 사원은 직무상 지득한 비밀을 엄수하고 회사기밀을 누설해서는 아니 된다. 다만, 「공익신고자 보호법」상의 '공익신고'에 해당하는 경우에는 적용되지 아니한다.</p>
+        <p style={css.indent}>2. 사원은 직무상 지득한 비밀을 엄수하고 회사기밀을 누설해서는 아니 된다. 다만, 「공익신고자 보호법」상의 {"'"}공익신고{"'"}에 해당하는 경우에는 적용되지 아니한다.</p>
         <p style={css.indent}>3. 사원은 회사의 제반규정을 준수하고 상사의 정당한 직무상 지시에 따라야 한다.</p>
         <p style={css.indent}>4. 사원은 사원으로서 품위를 손상하거나 회사의 명예를 실추시키는 행위를 하여서는 아니 된다.</p>
         <p style={css.indent}>5. 사원은 그 밖에 제2호와 제4호 규정에 준하는 행위를 하여서는 아니 된다.</p>
@@ -1100,11 +1097,11 @@ function WorkRulesPreview({ rules }: { rules: WorkRulesData }) {
         <p style={css.indent}>1. 업무 외 질병, 부상, 장애 등으로 장기 요양이 필요할 때: 1년의 범위 내에서 요양에 필요한 기간</p>
         <p style={css.indent}>2. 「병역법」에 따른 병역 복무를 마치기 위하여 징집 또는 소집된 경우: 징집 또는 소집기간</p>
         <p style={css.indent}>3. 회사가 지정하는 국내‧외 연구기관 또는 교육기관 등에서 연수, 직무훈련 등을 하게 된 경우: 1년의 범위 내에서 연수 등에 필요한 기간</p>
-        <p style={css.indent}>4. 임신 중인 여성 사원이 모성을 보호하거나 만 8세 이하 또는 초등학교 2학년 이하의 자녀를 가진 사원이 그 자녀의 양육을 위하여 필요한 경우(이하 "육아휴직"): {parentalLeaveMonths} 이내</p>
+        <p style={css.indent}>4. 임신 중인 여성 사원이 모성을 보호하거나 만 8세 이하 또는 초등학교 2학년 이하의 자녀를 가진 사원이 그 자녀의 양육을 위하여 필요한 경우(이하 {'"'}육아휴직{'"'}): {parentalLeaveMonths} 이내</p>
         {rules.parentalLeave2025 && (
           <p style={{ ...css.indent, color: '#0066cc', fontSize: '9.5pt' }}>※ 부모가 각각 3개월 이상 사용 시, 한부모, 중증장애아동 부모의 경우 6개월 추가 가능</p>
         )}
-        <p style={css.indent}>5. 사원이 조부모, 부모, 배우자, 배우자의 부모, 자녀 또는 손자녀의 질병, 사고, 노령으로 인하여 그 가족을 돌보기 위하여 필요한 경우(이하 "가족돌봄휴직"): 연간 90일 이내, 1회 30일 이상</p>
+        <p style={css.indent}>5. 사원이 조부모, 부모, 배우자, 배우자의 부모, 자녀 또는 손자녀의 질병, 사고, 노령으로 인하여 그 가족을 돌보기 위하여 필요한 경우(이하 {'"'}가족돌봄휴직{'"'}): 연간 90일 이내, 1회 30일 이상</p>
       </div>
 
       <div style={css.article}>
@@ -1535,7 +1532,7 @@ function WorkRulesPreview({ rules }: { rules: WorkRulesData }) {
       <h2 style={css.section}>제13장 직장 내 괴롭힘의 금지</h2>
 
       <div style={css.article}>
-        <p><span style={css.title}>제{rules.enableShiftWork ? 73 : 72}조(직장 내 괴롭힘 행위의 금지)</span> 회사의 사용자 또는 사원은 직장에서의 지위 또는 관계 등의 우위를 이용하여 업무상 적정범위를 넘어 다른 사원에게 신체적·정신적 고통을 주거나 근무환경을 악화시키는 행위(이하 "직장 내 괴롭힘"이라 한다)를 하여서는 아니 된다.</p>
+        <p><span style={css.title}>제{rules.enableShiftWork ? 73 : 72}조(직장 내 괴롭힘 행위의 금지)</span> 회사의 사용자 또는 사원은 직장에서의 지위 또는 관계 등의 우위를 이용하여 업무상 적정범위를 넘어 다른 사원에게 신체적·정신적 고통을 주거나 근무환경을 악화시키는 행위(이하 {'"'}직장 내 괴롭힘{'"'}이라 한다)를 하여서는 아니 된다.</p>
       </div>
 
       <div style={css.article}>
@@ -2024,7 +2021,7 @@ function WorkRulesPreview({ rules }: { rules: WorkRulesData }) {
             </tbody>
           </table>
           <div style={{ marginTop: '20px', padding: '10px', backgroundColor: '#f5f5f5', fontSize: '9pt' }}>
-            <p>※ "근로자 과반수"란 근로자 과반수로 조직된 노동조합이 있는 경우에는 그 노동조합을, 근로자 과반수로 조직된 노동조합이 없는 경우에는 근로자 과반수를 의미합니다.</p>
+            <p>※ {'"'}근로자 과반수{'"'}란 근로자 과반수로 조직된 노동조합이 있는 경우에는 그 노동조합을, 근로자 과반수로 조직된 노동조합이 없는 경우에는 근로자 과반수를 의미합니다.</p>
           </div>
         </div>
       )}

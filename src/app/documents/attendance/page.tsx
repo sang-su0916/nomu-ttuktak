@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useReactToPrint } from 'react-to-print';
 import { CompanyInfo, Employee } from '@/types';
 import { loadCompanyInfo, defaultCompanyInfo, getActiveEmployees } from '@/lib/storage';
@@ -55,24 +55,25 @@ function createRecords(year: number, month: number): DayRecord[] {
 const now = new Date();
 
 export default function AttendancePage() {
-  const [data, setData] = useState<AttendanceData>({
-    company: defaultCompanyInfo,
-    employeeName: '',
-    department: '',
-    year: now.getFullYear(),
-    month: now.getMonth() + 1,
-    records: createRecords(now.getFullYear(), now.getMonth() + 1),
+  const [data, setData] = useState<AttendanceData>(() => {
+    const base: AttendanceData = {
+      company: defaultCompanyInfo,
+      employeeName: '',
+      department: '',
+      year: now.getFullYear(),
+      month: now.getMonth() + 1,
+      records: createRecords(now.getFullYear(), now.getMonth() + 1),
+    };
+    if (typeof window === 'undefined') return base;
+    const saved = loadCompanyInfo();
+    return saved ? { ...base, company: saved } : base;
   });
   const [showPreview, setShowPreview] = useState(false);
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [employees] = useState<Employee[]>(() =>
+    typeof window !== 'undefined' ? getActiveEmployees() : []
+  );
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const printRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const saved = loadCompanyInfo();
-    if (saved) setData(prev => ({ ...prev, company: saved }));
-    setEmployees(getActiveEmployees());
-  }, []);
 
   const handleYearMonthChange = (year: number, month: number) => {
     setData(prev => ({ ...prev, year, month, records: createRecords(year, month) }));

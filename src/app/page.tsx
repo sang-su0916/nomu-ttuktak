@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Employee } from '@/types';
@@ -69,16 +69,15 @@ const serviceCategories = [
 ];
 
 export default function Home() {
-  const [companyName, setCompanyName] = useState('');
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [isLoaded, setIsLoaded] = useState(false);
-
-  useEffect(() => {
+  const [companyName] = useState(() => {
+    if (typeof window === 'undefined') return '';
     const company = loadCompanyInfo();
-    if (company) setCompanyName(company.name);
-    setEmployees(loadEmployees());
-    setIsLoaded(true);
-  }, []);
+    return company ? company.name : '';
+  });
+  const [employees] = useState<Employee[]>(() =>
+    typeof window !== 'undefined' ? loadEmployees() : []
+  );
+  const isLoaded = typeof window !== 'undefined';
 
   const activeEmployees = employees.filter(e => e.status === 'active');
   const fulltimeCount = activeEmployees.filter(e => e.employmentType === 'fulltime').length;

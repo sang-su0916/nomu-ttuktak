@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useReactToPrint } from 'react-to-print';
 import { CompanyInfo, Employee } from '@/types';
 import { loadCompanyInfo, defaultCompanyInfo, formatDate, formatBusinessNumber, formatResidentNumber, loadEmployees } from '@/lib/storage';
@@ -40,18 +40,18 @@ const defaultData: CareerCertData = {
 };
 
 export default function CareerCertificatePage() {
-  const [data, setData] = useState<CareerCertData>(defaultData);
+  const [data, setData] = useState<CareerCertData>(() => {
+    if (typeof window === 'undefined') return defaultData;
+    const saved = loadCompanyInfo();
+    return saved ? { ...defaultData, company: saved } : defaultData;
+  });
   const [showPreview, setShowPreview] = useState(false);
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  // 경력증명서는 퇴사자도 포함
+  const [employees] = useState<Employee[]>(() =>
+    typeof window !== 'undefined' ? loadEmployees() : []
+  );
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const printRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const saved = loadCompanyInfo();
-    if (saved) setData(prev => ({ ...prev, company: saved }));
-    // 경력증명서는 퇴사자도 포함
-    setEmployees(loadEmployees());
-  }, []);
 
   const handleEmployeeSelect = (id: string) => {
     setSelectedEmployeeId(id);

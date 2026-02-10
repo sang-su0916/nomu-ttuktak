@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { Employee, EmploymentType } from '@/types';
 import { 
@@ -62,16 +62,15 @@ const defaultEmployee: Omit<Employee, 'id' | 'createdAt' | 'updatedAt'> = {
 };
 
 export default function EmployeesPage() {
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>(() => {
+    if (typeof window === 'undefined') return [];
+    return loadEmployees();
+  });
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState(defaultEmployee);
   const [showOptimizer, setShowOptimizer] = useState(false);
   const [totalSalaryInput, setTotalSalaryInput] = useState(0);
-
-  useEffect(() => {
-    setEmployees(loadEmployees());
-  }, []);
 
   const handleSave = () => {
     if (!formData.info.name) {

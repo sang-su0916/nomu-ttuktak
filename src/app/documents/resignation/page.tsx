@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useReactToPrint } from 'react-to-print';
 import { CompanyInfo, Employee } from '@/types';
 import { loadCompanyInfo, defaultCompanyInfo, formatDate, getActiveEmployees } from '@/lib/storage';
@@ -32,17 +32,17 @@ const defaultData: ResignationData = {
 };
 
 export default function ResignationPage() {
-  const [data, setData] = useState<ResignationData>(defaultData);
+  const [data, setData] = useState<ResignationData>(() => {
+    if (typeof window === 'undefined') return defaultData;
+    const saved = loadCompanyInfo();
+    return saved ? { ...defaultData, company: saved } : defaultData;
+  });
   const [showPreview, setShowPreview] = useState(false);
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [employees] = useState<Employee[]>(() =>
+    typeof window !== 'undefined' ? getActiveEmployees() : []
+  );
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const printRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const saved = loadCompanyInfo();
-    if (saved) setData(prev => ({ ...prev, company: saved }));
-    setEmployees(getActiveEmployees());
-  }, []);
 
   const handleEmployeeSelect = (id: string) => {
     setSelectedEmployeeId(id);

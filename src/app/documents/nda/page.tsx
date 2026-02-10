@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useReactToPrint } from 'react-to-print';
 import { CompanyInfo, EmployeeInfo, Employee } from '@/types';
 import { loadCompanyInfo, defaultCompanyInfo, formatDate, formatBusinessNumber, getActiveEmployees } from '@/lib/storage';
@@ -30,17 +30,17 @@ const defaultNda: NdaData = {
 };
 
 export default function NdaPage() {
-  const [nda, setNda] = useState<NdaData>(defaultNda);
+  const [nda, setNda] = useState<NdaData>(() => {
+    if (typeof window === 'undefined') return defaultNda;
+    const saved = loadCompanyInfo();
+    return saved ? { ...defaultNda, company: saved } : defaultNda;
+  });
   const [showPreview, setShowPreview] = useState(false);
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [employees] = useState<Employee[]>(() =>
+    typeof window !== 'undefined' ? getActiveEmployees() : []
+  );
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const printRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const saved = loadCompanyInfo();
-    if (saved) setNda(prev => ({ ...prev, company: saved }));
-    setEmployees(getActiveEmployees());
-  }, []);
 
   const handleEmployeeSelect = (id: string) => {
     setSelectedEmployeeId(id);

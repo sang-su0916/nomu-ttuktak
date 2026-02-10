@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useReactToPrint } from 'react-to-print';
 import { CompanyInfo, EmployeeInfo, Employee } from '@/types';
 import { loadCompanyInfo, defaultCompanyInfo, formatDate, formatCurrency, formatBusinessNumber, formatResidentNumber, getActiveEmployees } from '@/lib/storage';
@@ -89,24 +89,18 @@ const defaultContract: ContractData = {
 const WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일'];
 
 export default function FulltimeContractPage() {
-  const [contract, setContract] = useState<ContractData>(defaultContract);
+  const [contract, setContract] = useState<ContractData>(() => {
+    if (typeof window === 'undefined') return defaultContract;
+    const saved = loadCompanyInfo();
+    return saved ? { ...defaultContract, company: saved, workplace: saved.address } : defaultContract;
+  });
   const [showPreview, setShowPreview] = useState(false);
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  // 등록된 정규직 직원 목록
+  const [employees] = useState<Employee[]>(() =>
+    typeof window !== 'undefined' ? getActiveEmployees().filter(e => e.employmentType === 'fulltime') : []
+  );
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
   const printRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const savedCompany = loadCompanyInfo();
-    if (savedCompany) {
-      setContract(prev => ({ 
-        ...prev, 
-        company: savedCompany,
-        workplace: savedCompany.address 
-      }));
-    }
-    // 등록된 직원 목록 불러오기
-    setEmployees(getActiveEmployees().filter(e => e.employmentType === 'fulltime'));
-  }, []);
 
   // 직원 선택 시 정보 자동 입력
   const handleEmployeeSelect = (employeeId: string) => {
@@ -134,23 +128,20 @@ export default function FulltimeContractPage() {
     }));
   };
 
-  // 연봉 ↔ 월급 자동 계산
-  useEffect(() => {
-    if (contract.annualSalary > 0 && contract.baseSalary === 0) {
-      setContract(prev => ({
-        ...prev,
-        baseSalary: Math.round(prev.annualSalary / 12)
-      }));
-    }
-  }, [contract.annualSalary, contract.baseSalary]);
-
   const handlePrint = useReactToPrint({
     contentRef: printRef,
     documentTitle: `정규직_근로계약서_${contract.employee.name || '이름없음'}`,
   });
 
+  // 연봉 ↔ 월급 자동 계산 포함
   const updateContract = (field: string, value: unknown) => {
-    setContract(prev => ({ ...prev, [field]: value }));
+    setContract(prev => {
+      const next = { ...prev, [field]: value };
+      if (field === 'annualSalary' && typeof value === 'number' && value > 0 && prev.baseSalary === 0) {
+        next.baseSalary = Math.round(value / 12);
+      }
+      return next;
+    });
   };
 
   const updateEmployee = (field: keyof EmployeeInfo, value: string) => {
@@ -749,8 +740,8 @@ function ContractPreview({ contract }: { contract: ContractData }) {
       {/* 서문 */}
       <div style={{ backgroundColor: '#f8fafc', padding: '16px 20px', borderRadius: '8px', marginBottom: '24px', border: '1px solid #e5e7eb' }}>
         <p style={{ fontSize: '14px', lineHeight: 1.8 }}>
-          <strong style={{ color: '#1e40af' }}>{contract.company.name}</strong> (이하 "사용자"라 함)과 
-          <strong style={{ color: '#1e40af' }}> {contract.employee.name}</strong> (이하 "근로자"라 함)은 
+          <strong style={{ color: '#1e40af' }}>{contract.company.name}</strong> (이하 {'"'}사용자{'"'}라 함)과
+          <strong style={{ color: '#1e40af' }}> {contract.employee.name}</strong> (이하 {'"'}근로자{'"'}라 함)은 
           다음과 같이 근로계약을 체결하고, 이를 성실히 이행할 것을 약정한다.
         </p>
       </div>

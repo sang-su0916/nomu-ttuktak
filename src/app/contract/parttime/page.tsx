@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useReactToPrint } from 'react-to-print';
 import { CompanyInfo, EmployeeInfo, Employee } from '@/types';
 import { loadCompanyInfo, defaultCompanyInfo, formatDate, formatCurrency, formatBusinessNumber, formatResidentNumber, getActiveEmployees } from '@/lib/storage';
@@ -97,24 +97,18 @@ const defaultContract: ParttimeContractData = {
 };
 
 export default function ParttimeContractPage() {
-  const [contract, setContract] = useState<ParttimeContractData>(defaultContract);
+  const [contract, setContract] = useState<ParttimeContractData>(() => {
+    if (typeof window === 'undefined') return defaultContract;
+    const saved = loadCompanyInfo();
+    return saved ? { ...defaultContract, company: saved, workplace: saved.address } : defaultContract;
+  });
   const [showPreview, setShowPreview] = useState(false);
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  // 등록된 파트타임 직원 목록
+  const [employees] = useState<Employee[]>(() =>
+    typeof window !== 'undefined' ? getActiveEmployees().filter(e => e.employmentType === 'parttime') : []
+  );
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
   const printRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const savedCompany = loadCompanyInfo();
-    if (savedCompany) {
-      setContract(prev => ({ 
-        ...prev, 
-        company: savedCompany,
-        workplace: savedCompany.address 
-      }));
-    }
-    // 등록된 파트타임 직원 목록 불러오기
-    setEmployees(getActiveEmployees().filter(e => e.employmentType === 'parttime'));
-  }, []);
 
   // 직원 선택 시 정보 자동 입력
   const handleEmployeeSelect = (employeeId: string) => {
@@ -141,27 +135,31 @@ export default function ParttimeContractPage() {
     }));
   };
 
-  // 주간 근로시간 자동 계산
-  useEffect(() => {
-    if (contract.scheduleType === 'fixed') {
-      const start = contract.fixedSchedule.workStartTime.split(':').map(Number);
-      const end = contract.fixedSchedule.workEndTime.split(':').map(Number);
-      const dailyMinutes = (end[0] * 60 + end[1]) - (start[0] * 60 + start[1]) - contract.fixedSchedule.breakTime;
-      const weeklyHours = (dailyMinutes * contract.fixedSchedule.workDays.length) / 60;
-      setContract(prev => ({ ...prev, weeklyHours: Math.round(weeklyHours * 10) / 10 }));
-    } else {
-      const totalHours = contract.flexibleSchedule.reduce((sum, s) => sum + (s.hours || 0), 0);
-      setContract(prev => ({ ...prev, weeklyHours: totalHours }));
-    }
-  }, [contract.scheduleType, contract.fixedSchedule, contract.flexibleSchedule]);
-
   const handlePrint = useReactToPrint({
     contentRef: printRef,
     documentTitle: `단시간근로자_근로계약서_${contract.employee.name || '이름없음'}`,
   });
 
+  // 주간 근로시간 자동 계산
+  const calcWeeklyHours = (c: ParttimeContractData): number => {
+    if (c.scheduleType === 'fixed') {
+      const start = c.fixedSchedule.workStartTime.split(':').map(Number);
+      const end = c.fixedSchedule.workEndTime.split(':').map(Number);
+      const dailyMinutes = (end[0] * 60 + end[1]) - (start[0] * 60 + start[1]) - c.fixedSchedule.breakTime;
+      return Math.round((dailyMinutes * c.fixedSchedule.workDays.length) / 60 * 10) / 10;
+    } else {
+      return c.flexibleSchedule.reduce((sum, s) => sum + (s.hours || 0), 0);
+    }
+  };
+
   const updateContract = (field: string, value: unknown) => {
-    setContract(prev => ({ ...prev, [field]: value }));
+    setContract(prev => {
+      const next = { ...prev, [field]: value };
+      if (['scheduleType', 'fixedSchedule', 'flexibleSchedule'].includes(field)) {
+        next.weeklyHours = calcWeeklyHours(next);
+      }
+      return next;
+    });
   };
 
   const updateEmployee = (field: keyof EmployeeInfo, value: string) => {
@@ -172,29 +170,34 @@ export default function ParttimeContractPage() {
   };
 
   const updateFixedSchedule = (field: string, value: unknown) => {
-    setContract(prev => ({
-      ...prev,
-      fixedSchedule: { ...prev.fixedSchedule, [field]: value }
-    }));
+    setContract(prev => {
+      const next = { ...prev, fixedSchedule: { ...prev.fixedSchedule, [field]: value } };
+      next.weeklyHours = calcWeeklyHours(next);
+      return next;
+    });
   };
 
   const toggleWorkDay = (day: string) => {
-    setContract(prev => ({
-      ...prev,
-      fixedSchedule: {
-        ...prev.fixedSchedule,
-        workDays: prev.fixedSchedule.workDays.includes(day)
-          ? prev.fixedSchedule.workDays.filter(d => d !== day)
-          : [...prev.fixedSchedule.workDays, day]
-      }
-    }));
+    setContract(prev => {
+      const next = {
+        ...prev,
+        fixedSchedule: {
+          ...prev.fixedSchedule,
+          workDays: prev.fixedSchedule.workDays.includes(day)
+            ? prev.fixedSchedule.workDays.filter(d => d !== day)
+            : [...prev.fixedSchedule.workDays, day]
+        }
+      };
+      next.weeklyHours = calcWeeklyHours(next);
+      return next;
+    });
   };
 
   const updateFlexibleSchedule = (index: number, field: keyof WorkSchedule, value: string | number) => {
     setContract(prev => {
       const newSchedule = [...prev.flexibleSchedule];
       newSchedule[index] = { ...newSchedule[index], [field]: value };
-      
+
       // 시간 자동 계산
       if (newSchedule[index].startTime && newSchedule[index].endTime) {
         const start = newSchedule[index].startTime.split(':').map(Number);
@@ -202,8 +205,10 @@ export default function ParttimeContractPage() {
         const minutes = (end[0] * 60 + end[1]) - (start[0] * 60 + start[1]) - (newSchedule[index].breakTime || 0);
         newSchedule[index].hours = Math.round(minutes / 60 * 10) / 10;
       }
-      
-      return { ...prev, flexibleSchedule: newSchedule };
+
+      const next = { ...prev, flexibleSchedule: newSchedule };
+      next.weeklyHours = calcWeeklyHours(next);
+      return next;
     });
   };
 
@@ -728,8 +733,8 @@ function ParttimeContractPreview({ contract }: { contract: ParttimeContractData 
       {/* 서문 */}
       <div style={{ backgroundColor: '#faf5ff', padding: '16px 20px', borderRadius: '8px', marginBottom: '24px', border: '1px solid #e9d5ff' }}>
         <p style={{ fontSize: '14px', lineHeight: 1.8 }}>
-          <strong style={{ color: '#7c3aed' }}>{contract.company.name}</strong> (이하 "사용자"라 함)과 
-          <strong style={{ color: '#7c3aed' }}> {contract.employee.name}</strong> (이하 "근로자"라 함)은 
+          <strong style={{ color: '#7c3aed' }}>{contract.company.name}</strong> (이하 {'"'}사용자{'"'}라 함)과
+          <strong style={{ color: '#7c3aed' }}> {contract.employee.name}</strong> (이하 {'"'}근로자{'"'}라 함)은 
           다음과 같이 단시간 근로계약을 체결한다.
         </p>
       </div>

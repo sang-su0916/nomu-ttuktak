@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useReactToPrint } from 'react-to-print';
 import { CompanyInfo, Employee } from '@/types';
 import { loadCompanyInfo, defaultCompanyInfo, formatDate, formatBusinessNumber, formatResidentNumber, getActiveEmployees } from '@/lib/storage';
@@ -36,17 +36,17 @@ const defaultCert: CertificateData = {
 };
 
 export default function CertificatePage() {
-  const [cert, setCert] = useState<CertificateData>(defaultCert);
+  const [cert, setCert] = useState<CertificateData>(() => {
+    if (typeof window === 'undefined') return defaultCert;
+    const saved = loadCompanyInfo();
+    return saved ? { ...defaultCert, company: saved } : defaultCert;
+  });
   const [showPreview, setShowPreview] = useState(false);
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [employees] = useState<Employee[]>(() =>
+    typeof window !== 'undefined' ? getActiveEmployees() : []
+  );
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const printRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const saved = loadCompanyInfo();
-    if (saved) setCert(prev => ({ ...prev, company: saved }));
-    setEmployees(getActiveEmployees());
-  }, []);
 
   const handleEmployeeSelect = (id: string) => {
     setSelectedEmployeeId(id);
