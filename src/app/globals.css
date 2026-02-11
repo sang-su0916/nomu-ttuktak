@@ -75,6 +75,8 @@ body {
 }
 
 /* Print Styles */
+@page { size: A4; margin: 20mm; }
+
 @media print {
   .no-print { display: none !important; }
   .print-only { display: block !important; }
@@ -667,4 +669,33 @@ body {
 .tooltip:hover::after {
   opacity: 1;
   visibility: visible;
+}
+
+/* Stat Compact */
+.stat-compact {
+  transition: box-shadow 0.15s;
+}
+
+.stat-compact:hover {
+  box-shadow: 0 2px 8px rgba(30, 58, 95, 0.06);
+}
+
+/* Pain Point text */
+.pain-text {
+  text-decoration-color: var(--danger);
+  text-decoration-thickness: 1.5px;
+}
+
+/* Quick Actions */
+.quick-actions .btn {
+  font-size: 0.8125rem;
+}
+
+/* Brand Strip */
+.brand-strip {
+  transition: box-shadow 0.2s;
+}
+
+.brand-strip:hover {
+  box-shadow: 0 4px 16px rgba(139, 105, 20, 0.1);
 }
