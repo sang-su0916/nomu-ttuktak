@@ -2,8 +2,8 @@
 
 import { useState, useRef } from 'react';
 import { useReactToPrint } from 'react-to-print';
-import { CompanyInfo, Employee as RegisteredEmployee } from '@/types';
-import { loadCompanyInfo, defaultCompanyInfo, formatCurrency, formatBusinessNumber, getActiveEmployees } from '@/lib/storage';
+import { CompanyInfo, Employee as RegisteredEmployee, PaymentRecord } from '@/types';
+import { loadCompanyInfo, defaultCompanyInfo, formatCurrency, formatBusinessNumber, getActiveEmployees, getPaymentRecordsByMonth } from '@/lib/storage';
 import { calculateInsurance, calculateIncomeTax } from '@/lib/constants';
 import HelpGuide from '@/components/HelpGuide';
 
@@ -86,6 +86,43 @@ export default function WageLedgerPage() {
     contentRef: printRef,
     documentTitle: `임금대장_${data.year}년${data.month}월`,
   });
+
+  // 급여명세서에서 불러오기 (PaymentRecord → LedgerEmployee)
+  const loadFromPayslips = () => {
+    const records = getPaymentRecordsByMonth(data.year, data.month);
+    if (records.length === 0) {
+      alert(`${data.year}년 ${data.month}월에 저장된 급여명세서가 없습니다.`);
+      return;
+    }
+
+    const newEmployees: LedgerEmployee[] = records.map(record => {
+      const emp = registeredEmployees.find(e => e.id === record.employeeId);
+      return {
+        id: `${Date.now()}-${record.id}`,
+        registeredId: record.employeeId,
+        name: emp?.info.name || '(알 수 없음)',
+        position: emp?.position || '',
+        baseSalary: record.earnings.baseSalary,
+        overtime: record.earnings.overtime,
+        nightWork: record.earnings.nightWork,
+        holidayWork: record.earnings.holidayWork,
+        bonus: record.earnings.bonus,
+        mealAllowance: record.earnings.mealAllowance,
+        carAllowance: record.earnings.carAllowance,
+        childcareAllowance: record.earnings.childcareAllowance,
+        researchAllowance: record.earnings.researchAllowance,
+        otherAllowance: record.earnings.otherAllowances.reduce((sum, a) => sum + a.amount, 0),
+        nationalPension: record.deductions.nationalPension,
+        healthInsurance: record.deductions.healthInsurance,
+        longTermCare: record.deductions.longTermCare,
+        employmentInsurance: record.deductions.employmentInsurance,
+        incomeTax: record.deductions.incomeTax,
+        localTax: record.deductions.localTax,
+      };
+    });
+
+    setData(prev => ({ ...prev, employees: newEmployees }));
+  };
 
   // 등록 직원 → 임금대장 직원 매핑
   const mapToLedgerEmployee = (emp: RegisteredEmployee): LedgerEmployee => {
@@ -283,8 +320,9 @@ export default function WageLedgerPage() {
       <HelpGuide
         pageKey="wage-ledger"
         steps={[
-          '"직원 연동"에서 등록된 직원을 선택하면 기본급이 자동 입력됩니다.',
-          '연장/야간/휴일 수당은 해당 직원 칸에 직접 입력하세요.',
+          '📋 급여명세서를 작성했다면 "급여명세서에서 불러오기" 버튼으로 한 번에 불러올 수 있습니다.',
+          '또는 "직원 연동"에서 등록된 직원을 선택하면 기본급이 자동 입력됩니다.',
+          '연장/야간/휴일 수당은 해당 직원 칸에 직접 입력하거나, 급여명세서에서 불러오면 자동 입력됩니다.',
           '"일괄 계산" 버튼을 누르면 4대보험과 세금이 자동 계산됩니다.',
           '"미리보기"로 확인 후 "인쇄/PDF"로 출력하세요.',
         ]}
@@ -330,8 +368,14 @@ export default function WageLedgerPage() {
                 <h2 className="form-section-title mb-0">🔗 직원 연동</h2>
                 <div className="flex gap-2">
                   <button
-                    onClick={addAllRegisteredEmployees}
+                    onClick={loadFromPayslips}
                     className="btn-primary text-sm"
+                  >
+                    📋 급여명세서에서 불러오기
+                  </button>
+                  <button
+                    onClick={addAllRegisteredEmployees}
+                    className="btn-secondary text-sm"
                     disabled={registeredEmployees.length === addedEmployeeIds.size}
                   >
                     👥 전체 추가 ({registeredEmployees.length - addedEmployeeIds.size}명)
@@ -346,7 +390,9 @@ export default function WageLedgerPage() {
                 </div>
               </div>
               <p className="text-sm text-gray-500 mt-2">
-                등록된 직원의 급여 정보를 자동으로 불러옵니다. 연장/야간/휴일 근로수당은 별도 입력하세요.
+                <span className="font-medium text-blue-600">📋 급여명세서에서 불러오기:</span> 이미 작성한 급여명세서를 한 번에 불러옵니다 (연장/야간/휴일 수당 포함).
+                <br />
+                등록된 직원을 수동으로 추가하려면 {'"'}전체 추가{'"'} 또는 {'"'}선택 추가{'"'}를 사용하세요.
               </p>
 
               {/* 직원 선택 패널 */}

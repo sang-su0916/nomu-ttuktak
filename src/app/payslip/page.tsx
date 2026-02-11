@@ -2,8 +2,8 @@
 
 import { useState, useRef, useCallback } from 'react';
 import { useReactToPrint } from 'react-to-print';
-import { CompanyInfo, EmployeeInfo, Employee } from '@/types';
-import { loadCompanyInfo, defaultCompanyInfo, formatCurrency, formatBusinessNumber, getActiveEmployees } from '@/lib/storage';
+import { CompanyInfo, EmployeeInfo, Employee, PaymentRecord } from '@/types';
+import { loadCompanyInfo, defaultCompanyInfo, formatCurrency, formatBusinessNumber, getActiveEmployees, addPaymentRecord, generateId } from '@/lib/storage';
 import { getWorkingDays, MINIMUM_WAGE } from '@/lib/constants';
 import HelpGuide from '@/components/HelpGuide';
 
@@ -237,7 +237,71 @@ export default function PayslipPage() {
   );
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
   const [showAdditionalOptions, setShowAdditionalOptions] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const printRef = useRef<HTMLDivElement>(null);
+
+  // 급여명세서 → PaymentRecord 저장
+  const handleSaveToLedger = () => {
+    if (!payslip.employee.name || !selectedEmployeeId) {
+      alert('직원을 선택해주세요.');
+      return;
+    }
+
+    const record: PaymentRecord = {
+      id: generateId(),
+      employeeId: selectedEmployeeId,
+      year: payslip.year,
+      month: payslip.month,
+      paymentDate: payslip.paymentDate,
+      earnings: {
+        baseSalary: payslip.earnings.baseSalary,
+        overtime: payslip.earnings.overtime,
+        nightWork: payslip.earnings.nightWork || 0,
+        holidayWork: payslip.earnings.holidayWork || 0,
+        bonus: payslip.earnings.bonus,
+        mealAllowance: payslip.earnings.mealAllowance,
+        carAllowance: payslip.earnings.transportAllowance,
+        childcareAllowance: payslip.earnings.childcareAllowance || 0,
+        researchAllowance: payslip.earnings.researchAllowance || 0,
+        otherAllowances: payslip.enabledAdditionalEarnings
+          .filter(key => !['childcareAllowance', 'researchAllowance'].includes(key))
+          .map(key => {
+            const item = ADDITIONAL_EARNINGS.find(e => e.key === key);
+            return {
+              name: item?.label || key,
+              amount: payslip.earnings[key] || 0,
+              taxable: item?.taxable || true,
+            };
+          }),
+      },
+      deductions: {
+        nationalPension: deductions.nationalPension,
+        healthInsurance: deductions.healthInsurance,
+        longTermCare: deductions.longTermCare,
+        employmentInsurance: deductions.employmentInsurance,
+        incomeTax: deductions.incomeTax,
+        localTax: deductions.localTax,
+        otherDeductions: [],
+      },
+      summary: {
+        totalEarnings,
+        totalTaxable: totalEarnings - (payslip.earnings.mealAllowance + payslip.earnings.transportAllowance),
+        totalNonTaxable: payslip.earnings.mealAllowance + payslip.earnings.transportAllowance,
+        totalDeductions,
+        netPay,
+      },
+      status: 'paid',
+      paidAt: payslip.paymentDate,
+      createdAt: new Date().toISOString(),
+    };
+
+    setSaveStatus('saving');
+    addPaymentRecord(record);
+    setTimeout(() => {
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    }, 300);
+  };
 
   // 근로일수/근로시간 자동 계산
   // 월급제: 209시간 고정 (주휴시간 포함 월 소정근로시간)
@@ -447,6 +511,13 @@ export default function PayslipPage() {
           >
             {showPreview ? '✏️ 수정하기' : '👁️ 미리보기'}
           </button>
+          <button
+            onClick={handleSaveToLedger}
+            disabled={!selectedEmployeeId || saveStatus === 'saving'}
+            className="btn-secondary disabled:opacity-50"
+          >
+            {saveStatus === 'saving' ? '💾 저장중...' : saveStatus === 'saved' ? '✅ 저장완료' : '💾 임금대장에 저장'}
+          </button>
           <button onClick={() => handlePrint()} className="btn-primary">
             🖨️ 인쇄/PDF
           </button>
@@ -458,6 +529,7 @@ export default function PayslipPage() {
         steps={[
           '"직원 선택"에서 대상 직원을 선택하면 기본 정보가 자동 입력됩니다.',
           '지급 항목(기본급, 수당)과 공제 항목을 확인하세요.',
+          '💾 "임금대장에 저장" 버튼을 누르면 이 데이터를 임금대장에서도 사용할 수 있습니다.',
           '"자동 계산"으로 4대보험·세금을 계산한 뒤 "미리보기" → "인쇄/PDF"로 출력하세요.',
         ]}
       />
