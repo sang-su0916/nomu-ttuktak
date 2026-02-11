@@ -25,10 +25,10 @@ export default function HelpGuide({ pageKey, steps }: HelpGuideProps) {
         onClick={() => setIsOpen(!isOpen)}
         className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors"
         style={{
-          color: isOpen ? 'var(--primary)' : 'var(--text-muted)',
-          backgroundColor: isOpen ? 'var(--primary-light, #e8f0fe)' : 'transparent',
+          color: isOpen ? '#ffffff' : '#64748b',
+          backgroundColor: isOpen ? '#3b82f6' : 'transparent',
           border: '1px solid',
-          borderColor: isOpen ? 'var(--primary)' : 'var(--border, #e2e8f0)',
+          borderColor: isOpen ? '#3b82f6' : '#e2e8f0',
         }}
       >
         <span>{isOpen ? '✕' : '?'}</span>
