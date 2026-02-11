@@ -492,6 +492,41 @@ export default function FulltimeContractPage() {
                   </button>
                 ))}
               </div>
+              {/* 실시간 근로시간 계산 표시 */}
+              {contract.workDays.length > 0 && (() => {
+                const startHour = parseInt(contract.workStartTime.split(':')[0]);
+                const startMin = parseInt(contract.workStartTime.split(':')[1]);
+                const endHour = parseInt(contract.workEndTime.split(':')[0]);
+                const endMin = parseInt(contract.workEndTime.split(':')[1]);
+                const totalMinutes = (endHour * 60 + endMin) - (startHour * 60 + startMin) - contract.breakTime;
+                const dailyHours = Math.floor(totalMinutes / 60);
+                const dailyMins = totalMinutes % 60;
+                const rawWeeklyHours = totalMinutes * contract.workDays.length / 60;
+                const weeklyPrescribedHours = Math.min(rawWeeklyHours, 40);
+                const weeklyOvertimeHours = Math.max(rawWeeklyHours - 40, 0);
+
+                return (
+                  <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <p className="text-sm text-blue-800">
+                      <strong>📊 계산된 근로시간</strong>
+                    </p>
+                    <p className="text-sm text-blue-700 mt-1">
+                      • 1일 소정근로시간: <strong>{dailyHours}시간 {dailyMins > 0 ? `${dailyMins}분` : ''}</strong>
+                    </p>
+                    <p className="text-sm text-blue-700">
+                      • 주 소정근로시간: <strong>{weeklyPrescribedHours}시간</strong> (법정상한)
+                    </p>
+                    {weeklyOvertimeHours > 0 && (
+                      <p className="text-sm text-red-600 font-medium mt-1">
+                        ⚠️ 주 연장근로시간: <strong>{weeklyOvertimeHours}시간</strong> (통상임금 50% 가산)
+                      </p>
+                    )}
+                    <p className="text-xs text-blue-600 mt-2">
+                      ※ 근로기준법 제50조: 주 소정근로시간은 40시간이 상한입니다.
+                    </p>
+                  </div>
+                );
+              })()}
             </div>
             <div className="mt-4">
               <label className="input-label">주휴일 *</label>
@@ -687,22 +722,55 @@ export default function FulltimeContractPage() {
                 <p className="text-xs text-gray-400 mt-1">근로기준법 제60조 (1년 근속 시 15일)</p>
               </div>
               <div>
-                <label className="input-label">연차휴가 산정기준</label>
+                <label className="input-label">연차휴가 산정기준 ⚠️ 중요</label>
                 <select
                   className="input-field"
                   value={contract.annualLeaveType}
                   onChange={(e) => updateContract('annualLeaveType', e.target.value)}
                 >
-                  <option value="hireDate">입사일 기준</option>
-                  <option value="fiscalYear">회계연도 기준</option>
+                  <option value="hireDate">입사일 기준 (개인별 입사일로부터 1년)</option>
+                  <option value="fiscalYear">회계연도 기준 (1월 1일 ~ 12월 31일)</option>
                 </select>
-                <p className="text-xs text-gray-400 mt-1">
-                  {contract.annualLeaveType === 'hireDate'
-                    ? '입사일로부터 1년 단위로 연차 발생'
-                    : '매년 1/1~12/31 기준으로 연차 발생 (비례부여)'}
-                </p>
+                <div className={`text-xs mt-1 p-2 rounded ${
+                  contract.annualLeaveType === 'hireDate' ? 'bg-blue-50 text-blue-700' : 'bg-green-50 text-green-700'
+                }`}>
+                  {contract.annualLeaveType === 'hireDate' ? (
+                    <>
+                      <strong>📅 입사일 기준:</strong> 입사일로부터 1년 단위로 연차가 발생합니다.
+                      <br />예: 2025년 3월 15일 입사 → 2026년 3월 15일에 15일 발생
+                    </>
+                  ) : (
+                    <>
+                      <strong>📆 회계연도 기준:</strong> 매년 1월 1일에 연차가 발생합니다 (입사 첫해는 비례부여).
+                      <br />예: 2025년 3월 15일 입사 → 2026년 1월 1일에 15일 발생 (2025년은 비례부여)
+                    </>
+                  )}
+                </div>
               </div>
             </div>
+
+            {/* 실시간 월급 합계 */}
+            {(contract.baseSalary > 0 || contract.mealAllowance > 0 || contract.otherAllowanceAmount > 0) && (
+              <div className="mt-4 p-4 bg-green-50 rounded-lg border border-green-200">
+                <p className="text-sm text-green-800 font-medium mb-2">💰 월급 합계 (세전)</p>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs text-green-700">
+                  {contract.baseSalary > 0 && <p>기본급: {formatCurrency(contract.baseSalary)}</p>}
+                  {contract.mealAllowance > 0 && <p>식대: {formatCurrency(contract.mealAllowance)}</p>}
+                  {contract.transportAllowance > 0 && <p>교통비: {formatCurrency(contract.transportAllowance)}</p>}
+                  {contract.vehicleAllowance > 0 && <p>차량: {formatCurrency(contract.vehicleAllowance)}</p>}
+                  {contract.childcareAllowance > 0 && <p>보육: {formatCurrency(contract.childcareAllowance)}</p>}
+                  {contract.researchAllowance > 0 && <p>연구: {formatCurrency(contract.researchAllowance)}</p>}
+                  {contract.otherAllowanceAmount > 0 && <p>기타: {formatCurrency(contract.otherAllowanceAmount)}</p>}
+                </div>
+                <p className="text-base font-bold text-green-700 mt-3 pt-3 border-t border-green-300">
+                  합계: {formatCurrency(
+                    contract.baseSalary + (contract.mealAllowance || 0) + (contract.transportAllowance || 0) +
+                    (contract.vehicleAllowance || 0) + (contract.childcareAllowance || 0) +
+                    (contract.researchAllowance || 0) + (contract.otherAllowanceAmount || 0)
+                  )}
+                </p>
+              </div>
+            )}
           </div>
 
           {/* 4대보험 */}
