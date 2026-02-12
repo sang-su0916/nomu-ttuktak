@@ -59,10 +59,9 @@ const createEmptyEmployee = (): LedgerEmployee => ({
   localTax: 0,
 });
 
-const today = new Date();
-
 export default function WageLedgerPage() {
   const [data, setData] = useState<WageLedgerData>(() => {
+    const today = new Date();
     const base: WageLedgerData = {
       company: defaultCompanyInfo,
       year: today.getFullYear(),
