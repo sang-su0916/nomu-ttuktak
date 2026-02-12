@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useReactToPrint } from 'react-to-print';
 import { CompanyInfo, EmployeeInfo, Employee } from '@/types';
 import { loadCompanyInfo, defaultCompanyInfo, formatDate, formatBusinessNumber, formatResidentNumber, getActiveEmployees } from '@/lib/storage';
@@ -24,26 +24,30 @@ const defaultEmployee: EmployeeInfo = {
   phone: '',
 };
 
-const defaultConsent: ConsentData = {
-  company: defaultCompanyInfo,
-  employee: defaultEmployee,
-  consentDate: new Date().toISOString().split('T')[0],
-  consentRequired: false,
-  consentMarketing: false,
-  consentThirdParty: false,
-};
+function createDefaultConsent(): ConsentData {
+  return {
+    company: defaultCompanyInfo,
+    employee: defaultEmployee,
+    consentDate: new Date().toISOString().split('T')[0],
+    consentRequired: false,
+    consentMarketing: false,
+    consentThirdParty: false,
+  };
+}
 
 export default function PrivacyConsentPage() {
-  const [consent, setConsent] = useState<ConsentData>(() => {
-    if (typeof window === 'undefined') return defaultConsent;
-    const saved = loadCompanyInfo();
-    return saved ? { ...defaultConsent, company: saved } : defaultConsent;
-  });
+  const [consent, setConsent] = useState<ConsentData>(createDefaultConsent);
   const [showPreview, setShowPreview] = useState(false);
-  const [employees] = useState<Employee[]>(() =>
-    typeof window !== 'undefined' ? getActiveEmployees() : []
-  );
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
+
+  useEffect(() => {
+    const saved = loadCompanyInfo();
+    if (saved) {
+      setConsent(prev => ({ ...prev, company: saved }));
+    }
+    setEmployees(getActiveEmployees());
+  }, []);
   const printRef = useRef<HTMLDivElement>(null);
 
   const handleEmployeeSelect = (employeeId: string) => {

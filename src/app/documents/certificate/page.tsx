@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useReactToPrint } from 'react-to-print';
 import { CompanyInfo, Employee } from '@/types';
 import { loadCompanyInfo, defaultCompanyInfo, formatDate, formatBusinessNumber, formatResidentNumber, getActiveEmployees } from '@/lib/storage';
@@ -22,31 +22,37 @@ interface CertificateData {
 
 const purposes = ['은행 제출용', '관공서 제출용', '비자 신청용', '기타'];
 
-const defaultCert: CertificateData = {
-  company: defaultCompanyInfo,
-  employeeName: '',
-  residentNumber: '',
-  address: '',
-  department: '',
-  position: '',
-  hireDate: '',
-  purpose: '은행 제출용',
-  customPurpose: '',
-  issueDate: new Date().toISOString().split('T')[0],
-  documentNumber: `제 ${new Date().getFullYear()}-001 호`,
-};
+function createDefaultCert(): CertificateData {
+  const today = new Date();
+  return {
+    company: defaultCompanyInfo,
+    employeeName: '',
+    residentNumber: '',
+    address: '',
+    department: '',
+    position: '',
+    hireDate: '',
+    purpose: '은행 제출용',
+    customPurpose: '',
+    issueDate: today.toISOString().split('T')[0],
+    documentNumber: `제 ${today.getFullYear()}-001 호`,
+  };
+}
 
 export default function CertificatePage() {
-  const [cert, setCert] = useState<CertificateData>(() => {
-    if (typeof window === 'undefined') return defaultCert;
-    const saved = loadCompanyInfo();
-    return saved ? { ...defaultCert, company: saved } : defaultCert;
-  });
+  const [cert, setCert] = useState<CertificateData>(createDefaultCert);
   const [showPreview, setShowPreview] = useState(false);
-  const [employees] = useState<Employee[]>(() =>
-    typeof window !== 'undefined' ? getActiveEmployees() : []
-  );
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+
+  // 클라이언트에서만 데이터 로드
+  useEffect(() => {
+    const saved = loadCompanyInfo();
+    if (saved) {
+      setCert(prev => ({ ...prev, company: saved }));
+    }
+    setEmployees(getActiveEmployees());
+  }, []);
   const printRef = useRef<HTMLDivElement>(null);
 
   const handleEmployeeSelect = (id: string) => {
